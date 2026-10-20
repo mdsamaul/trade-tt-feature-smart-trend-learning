@@ -462,21 +462,21 @@ class StrategyLearner:
         Returns: (is_allowed, confidence_delta, rationale)
         """
         with self.lock:
-            # Rule 1: Trend Alignment Guardrails
-            # In STRONG dominant trends, require institutional rejection wick (>= 20%) or strong reversal body (>= 40%) to take a counter-trend trade
-            if direction == "PUT" and trend == "STRONG_BULLISH" and wick_ratio < 0.20 and body_ratio < 0.40:
-                return False, -30.0, f"[AI Trend Guardrail]: Blocked counter-trend PUT in STRONG_BULLISH market without institutional resistance rejection (wick < 20%)."
+            # Rule 1: Bidirectional Candle Probability & Trend Alignment Guardrails
+            # Symmetrically allow counter-trend setups if price action shows strong rejection wick (>= 18%), reversal body (>= 35%), or key boundary position
+            if direction == "PUT" and trend == "STRONG_BULLISH" and wick_ratio < 0.18 and body_ratio < 0.35 and pos_ratio > 0.32:
+                return False, -30.0, f"[AI Trend Guardrail]: Blocked counter-trend PUT in STRONG_BULLISH market without institutional resistance rejection (wick < 18% and pos not at ceiling)."
 
-            if direction == "CALL" and trend == "STRONG_BEARISH" and wick_ratio < 0.20 and body_ratio < 0.40:
-                return False, -30.0, f"[AI Trend Guardrail]: Blocked counter-trend CALL in STRONG_BEARISH market without institutional support bounce (wick < 20%)."
+            if direction == "CALL" and trend == "STRONG_BEARISH" and wick_ratio < 0.18 and body_ratio < 0.35 and pos_ratio < 0.68:
+                return False, -30.0, f"[AI Trend Guardrail]: Blocked counter-trend CALL in STRONG_BEARISH market without institutional support bounce (wick < 18% and pos not at floor)."
 
             # Rule 2: Candle Color Directional Alignment
             # If entering in opposite direction of candle color, require a confirmed rejection tail (pin-bar / hammer / star)
-            if direction == "CALL" and candle_color == "RED" and wick_ratio < 0.20 and body_ratio > 0.40:
-                return False, -25.0, "[AI Learned Defense]: Blocked CALL on strong RED candle without lower absorption wick >= 20%."
+            if direction == "CALL" and candle_color == "RED" and wick_ratio < 0.18 and body_ratio > 0.40:
+                return False, -25.0, "[AI Learned Defense]: Blocked CALL on strong RED candle without lower absorption wick >= 18%."
 
-            if direction == "PUT" and candle_color == "GREEN" and wick_ratio < 0.20 and body_ratio > 0.40:
-                return False, -25.0, "[AI Learned Defense]: Blocked PUT on strong GREEN candle without upper rejection wick >= 20%."
+            if direction == "PUT" and candle_color == "GREEN" and wick_ratio < 0.18 and body_ratio > 0.40:
+                return False, -25.0, "[AI Learned Defense]: Blocked PUT on strong GREEN candle without upper rejection wick >= 18%."
 
             # Rule 3: Active Learned Anti-Pattern Interception
             # 3A. Resistance Ceiling Reversal Protection (Block CALL into ceiling supply zone)
@@ -508,8 +508,8 @@ class StrategyLearner:
                 return True, 0.0, "New setup pattern. Permitted under standard statistical conditions."
 
             if mem.status == "BLOCKED":
-                # If high-win-rate pattern (>= 75%) was accidentally blocked by 2 consecutive losses, unblock to cooldown
-                if mem.total_trades >= 4 and mem.win_rate >= 75.0:
+                # If sample size is small (< 6 trades) or win rate >= 70%: unblock to defensive cooldown rather than permanent lock
+                if mem.total_trades < 6 or (mem.total_trades >= 4 and mem.win_rate >= 70.0):
                     mem.status = "DEFENSIVE_COOLDOWN"
                     mem.consecutive_losses = 0
                 else:
@@ -566,11 +566,11 @@ class StrategyLearner:
         if direction == "CALL" and "BEARISH" in trend:
             cause_code = "COUNTER_TREND_BEARISH_TRAP"
             reason = f"CALL failed against dominant {trend} market ({price_delta:+.5f}). Sellers overpowered buyer attempt."
-            insight = "AI RULE ENFORCED: Never buy CALL during BEARISH trends. UP -> CALL only, DOWN -> PUT only."
+            insight = "AI DEFENSE ACTIVATED: In BEARISH trends, require verified support floor bounce (lower wick >= 18%) before taking CALL."
         elif direction == "PUT" and "BULLISH" in trend:
             cause_code = "COUNTER_TREND_BULLISH_TRAP"
             reason = f"PUT failed against dominant {trend} market ({price_delta:+.5f}). Buyers overpowered seller attempt."
-            insight = "AI RULE ENFORCED: Never buy PUT during BULLISH trends. UP -> CALL only, DOWN -> PUT only."
+            insight = "AI DEFENSE ACTIVATED: In BULLISH trends, require verified resistance ceiling rejection (upper wick >= 18%) before taking PUT."
 
         # Case 2: Resistance Ceiling Reversal
         elif direction == "CALL" and pos_ratio <= 0.20 and (trend == "SIDEWAYS_CONSOLIDATION" or opposing_wick >= 0.35):
@@ -1205,17 +1205,17 @@ class VisionAIEngine:
         system_prompt = f"""You are a World-Class Binary Options Quantitative Vision Trader analyzing Quotex Candlestick Charts.
 Your objective is to identify ultra-high probability trade setups (CALL, PUT, or SKIP) for a {timeframe_seconds}-second binary option expiry.
 
-STRICT MANDATORY RULES (TREND-FOLLOWING & LOSS AVOIDANCE):
-1. STRICT TREND-FOLLOWING MANDATE ("UP -> CALL only, DOWN -> PUT only"):
-   - If dominant trend is BULLISH / UP: You MUST ONLY consider CALL setups (or SKIP). Predicting PUT in a Bullish trend is STRICTLY FORBIDDEN.
-   - If dominant trend is BEARISH / DOWN: You MUST ONLY consider PUT setups (or SKIP). Predicting CALL in a Bearish trend is STRICTLY FORBIDDEN.
-   - NEVER TRADE AGAINST THE DOMINANT TREND.
-2. REVERSAL BOUNDARIES & RESISTANCE CEILINGS:
-   - Do NOT predict CALL when price is near the upper channel ceiling / resistance wall.
-   - Do NOT predict PUT when price is near the lower channel floor / support wall.
-   - Do NOT predict trade if the candle has a large opposing rejection wick (>= 20%).
+CORE BIDIRECTIONAL CANDLE PROBABILITY RULES:
+1. BIDIRECTIONAL CANDLE PROBABILITY EVALUATION:
+   - Symmetrically analyze both the UP (CALL) probability and DOWN (PUT) probability based on the candle price action, wicks, momentum, and key support/resistance levels.
+   - UP PROBABILITY CONFLUENCES: Green momentum expansion, long lower buyer absorption wicks (hammers), support floor defense, or clean ceiling breakouts. When UP probability dominates, select "CALL".
+   - DOWN PROBABILITY CONFLUENCES: Red momentum expansion, long upper seller rejection wicks (shooting stars), resistance ceiling rejection, or clean floor breakdowns. When DOWN probability dominates, select "PUT".
+   - Counter-trend setups ARE PERMITTED whenever verified by strong price action (e.g. rejection wick >= 18% or reversal engulfing at channel boundaries).
+2. KEY CHANNEL BOUNDARIES & REVERSAL ZONES:
+   - Near resistance ceiling (top of chart): High probability for downward rejection (PUT) unless breakout volume is expanding.
+   - Near support floor (bottom of chart): High probability for upward bounce (CALL) unless breakdown volume is expanding.
 3. DOJI & INDECISION FILTER:
-   - If candle body is weak/thin (<28%) or market is in sideways consolidation chop without clean S&R bounce, you MUST output "SKIP".
+   - If candle body is flat/micro (< 15%) or market is in dead indecision chop with equal wicks on both sides, both probabilities are low -> output "SKIP".
 
 DYNAMIC STRICTNESS LEVEL: Level {strictness_cfg.level}/5 ({strictness_cfg.name})
 MINIMUM CONFIDENCE REQUIRED TO EXECUTE: {strictness_cfg.min_confidence}%
@@ -1225,26 +1225,24 @@ CRITERIA: {strictness_cfg.description}
 
 Analyze the provided chart image:
 1. Identify the recent trend (Bullish, Bearish, or Sideways/Ranging).
-2. Examine the most recent 1 to 3 completed candles and the current forming candle. Look for:
-   - Long rejection wicks (pin bars / hammers) bouncing off support/resistance or moving averages.
-   - Momentum engulfing bodies.
-   - Clean pullbacks to key structural levels.
-3. Extract or estimate the current asset price from the right-hand price scale or price watermark.
-4. Calculate a realistic confidence score (0 to 100%).
-   - If confidence is BELOW {strictness_cfg.min_confidence}%, you MUST output "SKIP".
-   - Only output "CALL" or "PUT" if the setup satisfies all strictness criteria.
+2. Examine the recent completed candles and current forming candle. Look for rejection wicks, momentum bodies, and S/R levels.
+3. Calculate the UP probability (0 to 100%) and DOWN probability (0 to 100%).
+4. If the leading direction's probability is BELOW {strictness_cfg.min_confidence}%, you MUST output "SKIP".
+5. Only output "CALL" or "PUT" if the setup satisfies all strictness criteria.
 
 You MUST respond strictly in valid JSON format matching this schema:
 {{
   "direction": "CALL" | "PUT" | "SKIP",
   "confidence": <float between 0 and 100>,
+  "up_probability": <float between 0 and 100>,
+  "down_probability": <float between 0 and 100>,
   "current_price": <float price, e.g. 1.08452 or 92.450>,
   "trend": "BULLISH" | "BEARISH" | "SIDEWAYS",
   "setup_grade": "A+" | "A" | "B+" | "B" | "C",
   "rejection_wick_found": <boolean>,
   "support_resistance_level": "<string level or description>",
   "pattern_name": "<string setup pattern name>",
-  "reasoning": "<concise 2-sentence rationale for directional bias or skip rationale>"
+  "reasoning": "<concise 2-sentence rationale comparing UP vs DOWN probability>"
 }}
 """
 
@@ -1315,6 +1313,16 @@ You MUST respond strictly in valid JSON format matching this schema:
             confidence = 50.0
 
         try:
+            up_prob = float(data.get("up_probability", confidence if direction == "CALL" else (100.0 - confidence if direction == "PUT" else 50.0)))
+        except (ValueError, TypeError):
+            up_prob = 50.0
+
+        try:
+            down_prob = float(data.get("down_probability", confidence if direction == "PUT" else (100.0 - confidence if direction == "CALL" else 50.0)))
+        except (ValueError, TypeError):
+            down_prob = 50.0
+
+        try:
             price = float(data.get("current_price", 100.0))
             if price <= 0:
                 price = 100.0
@@ -1355,6 +1363,9 @@ You MUST respond strictly in valid JSON format matching this schema:
         return {
             "direction": direction,
             "confidence": round(confidence, 1),
+            "up_probability": round(up_prob, 1),
+            "down_probability": round(down_prob, 1),
+            "probability_spread": round(up_prob - down_prob, 1),
             "current_price": round(price, 5),
             "trend": trend,
             "setup_grade": setup_grade,
@@ -1405,6 +1416,9 @@ You MUST respond strictly in valid JSON format matching this schema:
             return {
                 "direction": "SKIP",
                 "confidence": 50.0,
+                "up_probability": 50.0,
+                "down_probability": 50.0,
+                "probability_spread": 0.0,
                 "current_price": base_price,
                 "trend": trend,
                 "setup_grade": "C",
@@ -1431,6 +1445,9 @@ You MUST respond strictly in valid JSON format matching this schema:
             return {
                 "direction": "SKIP",
                 "confidence": 50.0,
+                "up_probability": 50.0,
+                "down_probability": 50.0,
+                "probability_spread": 0.0,
                 "current_price": base_price,
                 "trend": trend,
                 "setup_grade": "C",
@@ -1450,6 +1467,9 @@ You MUST respond strictly in valid JSON format matching this schema:
             return {
                 "direction": "SKIP",
                 "confidence": 52.0,
+                "up_probability": 50.0,
+                "down_probability": 50.0,
+                "probability_spread": 0.0,
                 "current_price": base_price,
                 "trend": trend,
                 "setup_grade": "C",
@@ -1464,269 +1484,285 @@ You MUST respond strictly in valid JSON format matching this schema:
                 "candle_color": active_c["color"]
             }
 
+        # =========================================================================
+        # BIDIRECTIONAL CANDLE PROBABILITY DECISION ENGINE
+        # Symmetrically calculates UP (CALL) probability & DOWN (PUT) probability
+        # based on active candle anatomy, rejection wicks, momentum, and S/R levels.
+        # =========================================================================
+
+        up_score = 50.0
+        down_score = 50.0
+        up_confluences: List[str] = []
+        down_confluences: List[str] = []
+
+        # 1. Macro Trend Flow (Provides baseline bias, but doesn't forbid reversals)
+        if trend == "STRONG_BULLISH":
+            up_score += 6.0
+            down_score -= 4.0
+            up_confluences.append("Bullish Trend Baseline (+6%)")
+        elif trend == "MILD_BULLISH":
+            up_score += 3.0
+            down_score -= 2.0
+            up_confluences.append("Mild Bullish Flow (+3%)")
+        elif trend == "STRONG_BEARISH":
+            down_score += 6.0
+            up_score -= 4.0
+            down_confluences.append("Bearish Trend Baseline (+6%)")
+        elif trend == "MILD_BEARISH":
+            down_score += 3.0
+            up_score -= 2.0
+            down_confluences.append("Mild Bearish Flow (+3%)")
+
+        # 2. Active Candle Price Action (Primary signal for 1M candle close)
+        c_color = active_c["color"]
+        body_ratio = active_c["body_ratio"]
+        upper_wick = active_c["upper_wick_ratio"]
+        lower_wick = active_c["lower_wick_ratio"]
+
+        if c_color == "GREEN":
+            # Green candle body momentum
+            up_score += body_ratio * 22.0
+            down_score -= body_ratio * 12.0
+            if body_ratio >= 0.35:
+                up_confluences.append(f"Solid Green Expansion ({body_ratio*100:.0f}% body)")
+
+            # Overhead Seller Wick: if sellers pushed down from highs
+            if upper_wick >= 0.20:
+                down_score += upper_wick * 35.0
+                up_score -= upper_wick * 30.0
+                down_confluences.append(f"Upper Seller Rejection Wick ({upper_wick*100:.0f}%)")
+            elif upper_wick <= 0.12 and body_ratio >= 0.25:
+                up_score += 7.0
+                up_confluences.append("Clean Bullish Close near Highs")
+
+            # Lower Buyer Hammer Wick: if buyers absorbed lows
+            if lower_wick >= 0.20:
+                up_score += lower_wick * 28.0
+                down_score -= lower_wick * 18.0
+                up_confluences.append(f"Bullish Hammer Absorption Wick ({lower_wick*100:.0f}%)")
+
+        elif c_color == "RED":
+            # Red candle body momentum
+            down_score += body_ratio * 22.0
+            up_score -= body_ratio * 12.0
+            if body_ratio >= 0.35:
+                down_confluences.append(f"Solid Red Expansion ({body_ratio*100:.0f}% body)")
+
+            # Lower Buyer Wick: if buyers defended floor and bounced
+            if lower_wick >= 0.20:
+                up_score += lower_wick * 35.0
+                down_score -= lower_wick * 30.0
+                up_confluences.append(f"Lower Buyer Defense Wick ({lower_wick*100:.0f}%)")
+            elif lower_wick <= 0.12 and body_ratio >= 0.25:
+                down_score += 7.0
+                down_confluences.append("Clean Bearish Close near Lows")
+
+            # Upper Seller Star Wick: if sellers knocked down rallies
+            if upper_wick >= 0.20:
+                down_score += upper_wick * 28.0
+                up_score -= upper_wick * 18.0
+                down_confluences.append(f"Bearish Shooting Star Wick ({upper_wick*100:.0f}%)")
+
+        # 3. Two-Candle Reversal & Engulfing Confluence
+        prev_color = prev_c["color"]
+        prev_h = max(1, prev_c["h"])
+        curr_h = active_c["h"]
+
+        # Bullish Engulfing: Current green candle engulfs previous red candle
+        if c_color == "GREEN" and prev_color == "RED" and body_ratio >= 0.32 and curr_h >= (prev_h * 1.05):
+            up_score += 16.0
+            down_score -= 12.0
+            up_confluences.append("Bullish Engulfing Breakout")
+
+        # Bearish Engulfing: Current red candle engulfs previous green candle
+        if c_color == "RED" and prev_color == "GREEN" and body_ratio >= 0.32 and curr_h >= (prev_h * 1.05):
+            down_score += 16.0
+            up_score -= 12.0
+            down_confluences.append("Bearish Engulfing Breakdown")
+
+        # Two consecutive same-color expansion
+        if c_color == "GREEN" and prev_color == "GREEN" and body_ratio >= 0.28:
+            up_score += 8.0
+            up_confluences.append("Consecutive Green Expansion")
+        elif c_color == "RED" and prev_color == "RED" and body_ratio >= 0.28:
+            down_score += 8.0
+            down_confluences.append("Consecutive Red Expansion")
+
+        # 4. Support & Resistance Channel Position (pos: 0.0=Resistance Ceiling, 1.0=Support Floor)
+        if pos <= 0.30:
+            # Resistance Ceiling Zone
+            if upper_wick >= 0.18 or c_color == "RED":
+                down_score += 16.0 + (upper_wick * 20.0)
+                up_score -= 22.0
+                down_confluences.append(f"Resistance Ceiling Wall Rejection (pos {pos*100:.0f}%)")
+            elif c_color == "GREEN" and body_ratio >= 0.36 and upper_wick <= 0.14:
+                up_score += 14.0
+                down_score -= 10.0
+                up_confluences.append("Confirmed Resistance Breakout Expansion")
+            else:
+                up_score -= 14.0
+
+        elif pos >= 0.70:
+            # Support Floor Zone
+            if lower_wick >= 0.18 or c_color == "GREEN":
+                up_score += 16.0 + (lower_wick * 20.0)
+                down_score -= 22.0
+                up_confluences.append(f"Support Floor Bounce Defense (pos {pos*100:.0f}%)")
+            elif c_color == "RED" and body_ratio >= 0.36 and lower_wick <= 0.14:
+                down_score += 14.0
+                up_score -= 10.0
+                down_confluences.append("Confirmed Support Breakdown Expansion")
+            else:
+                down_score -= 14.0
+
+        else:
+            # Mid-Channel Open Space
+            if c_color == "GREEN" and body_ratio >= 0.28:
+                up_score += 8.0
+                up_confluences.append("Mid-Channel Bullish Momentum")
+            elif c_color == "RED" and body_ratio >= 0.28:
+                down_score += 8.0
+                down_confluences.append("Mid-Channel Bearish Momentum")
+
+        # 5. Streak Climax Exhaustion Protection
+        if green_streak >= 5:
+            penalty = (green_streak - 4) * 5.0
+            up_score -= penalty
+            if upper_wick >= 0.16:
+                down_score += 12.0
+                down_confluences.append(f"Climax Exhaustion Reversal ({green_streak} green candles)")
+
+        if red_streak >= 5:
+            penalty = (red_streak - 4) * 5.0
+            down_score -= penalty
+            if lower_wick >= 0.16:
+                up_score += 12.0
+                up_confluences.append(f"Climax Floor Bounce ({red_streak} red candles)")
+
+        # 6. Clamp Probabilities to Valid Range [25.0, 96.0]
+        up_prob = min(96.0, max(25.0, up_score))
+        down_prob = min(96.0, max(25.0, down_score))
+        diff = up_prob - down_prob
+
+        # 7. Directional Resolution & Pattern Selection
         direction = "SKIP"
-        confidence = 55.0
+        confidence = max(up_prob, down_prob)
         grade = "B"
         rejection_wick = False
         pattern_name = "MARKET_INDECISIVE"
         level_name = f"Zone (Pos: {pos:.2f})"
-        reasoning = "Awaiting high-probability price action confluence."
+        reasoning = f"No clear directional edge (UP: {up_prob:.1f}%, DOWN: {down_prob:.1f}%). Strictness Level {strictness_cfg.level} requires >= {strictness_cfg.min_confidence}% confidence."
 
-        # =========================================================================
-        # SENIOR QUANTITATIVE PRICE ACTION DECISION ENGINE
-        # =========================================================================
-
-        # SETUP 1: BULLISH ENVIRONMENTS (STRONG_BULLISH or MILD_BULLISH)
-        if trend in ["STRONG_BULLISH", "MILD_BULLISH"]:
-            # 1A. Resistance Ceiling Zone & Reversal Protection (Upper 32% of channel: pos <= 0.32)
-            if pos <= 0.32:
-                # If strong overhead seller rejection wick (>= 20%) or red candle at ceiling:
-                if active_c["upper_wick_ratio"] >= 0.20 or (active_c["color"] == "RED" and active_c["body_ratio"] >= 0.25):
-                    # Counter-trend PUT only if at extreme ceiling (pos <= 0.16) with clean rejection
-                    if pos <= 0.16 and active_c["upper_wick_ratio"] >= 0.22:
-                        direction = "PUT"
-                        confidence = 88.0 + (active_c["upper_wick_ratio"] * 10.0)
-                        grade = "A"
-                        rejection_wick = True
-                        level_name = "Resistance Ceiling Rejection"
-                        pattern_name = "RESISTANCE_CEILING_REVERSAL"
-                        reasoning = f"Uptrend Ceiling Exhaustion: Sellers actively rejected price at upper resistance wall ({pos*100:.0f}% pos) with {active_c['upper_wick_ratio']*100:.0f}% upper rejection wick."
-                    else:
-                        direction = "SKIP"
-                        confidence = 55.0
-                        pattern_name = "BULLISH_RESISTANCE_WAIT"
-                        reasoning = f"Price at resistance ceiling ({pos*100:.0f}% pos) with seller resistance. Awaiting pullback dip before next CALL."
-                # Bullish Breakout Expansion: Green candle with clean momentum pushing THROUGH resistance
-                elif active_c["color"] == "GREEN" and active_c["body_ratio"] >= 0.32 and active_c["upper_wick_ratio"] <= 0.15 and green_streak < 5:
-                    direction = "CALL"
-                    confidence = 89.0 + (active_c["body_ratio"] * 8.0)
-                    grade = "A"
-                    rejection_wick = False
-                    level_name = "Bullish Ceiling Breakout"
-                    pattern_name = "BULLISH_MOMENTUM_CONTINUATION"
-                    reasoning = f"Bullish Ceiling Breakout: Institutional buying expanding through resistance ({pos*100:.0f}% pos) with strong green body ({active_c['body_ratio']*100:.0f}%)."
-                else:
-                    direction = "SKIP"
-                    confidence = 55.0
-                    pattern_name = "BULLISH_RESISTANCE_WAIT"
-                    reasoning = f"Price inside upper ceiling zone ({pos*100:.0f}% pos). Lacks verified breakout volume. Pausing to avoid buying into resistance."
-
-            # 1B. Strong Bearish Trend-Shift Impulse
-            elif active_c["color"] == "RED" and active_c["body_ratio"] >= 0.50 and active_c["h"] >= (prev_c["h"] * 1.1):
-                direction = "PUT"
-                confidence = 87.0
-                grade = "A"
-                rejection_wick = False
-                level_name = "Bearish Trend Reversal Impulse"
-                pattern_name = "BEARISH_ENGULFING_BREAKDOWN"
-                reasoning = f"Bearish Impulse Breakdown: Heavy institutional selling formed an engulfing red candle ({active_c['body_ratio']*100:.0f}% body) overpowering prior uptrend."
-
-            # 1C. Pullback Dip Absorption Hammer (Price pulled back into support/discount pos >= 0.38 with clean lower absorption wick)
-            elif pos >= 0.38 and active_c["lower_wick_ratio"] >= 0.24 and (active_c["color"] == "GREEN" or active_c["lower_wick_ratio"] >= 0.30):
-                direction = "CALL"
-                confidence = 89.0 + (active_c["lower_wick_ratio"] * 12.0)
-                grade = "A+"
-                rejection_wick = True
-                level_name = "Bullish Dynamic Dip Absorption"
-                pattern_name = "BULLISH_STRONG_HAMMER_REJECTION"
-                reasoning = f"A+ Uptrend Pullback Rejection: Institutional buying absorbed the dip at dynamic support ({pos*100:.0f}% pos) with a {active_c['lower_wick_ratio']*100:.0f}% lower absorption wick. Trend aligned with {trend}."
-
-            # 1D. Solid Bullish Momentum Expansion (Green candle in mid-channel with room to resistance)
-            elif active_c["color"] == "GREEN" and active_c["body_ratio"] >= 0.22 and pos > 0.32:
-                if green_streak >= 5 and (pos <= 0.38 or active_c["body_ratio"] < 0.28):
-                    direction = "SKIP"
-                    confidence = 55.0
-                    pattern_name = "BULLISH_EXHAUSTION_WAIT"
-                    reasoning = f"Uptrend Climax ({green_streak} green candles approaching ceiling). Awaiting pullback dip before next CALL."
-                else:
-                    direction = "CALL"
-                    confidence = 88.0 + (active_c["body_ratio"] * 8.0)
-                    grade = "A"
-                    rejection_wick = active_c["lower_wick_ratio"] >= 0.15
-                    level_name = "Bullish Momentum Expansion"
-                    pattern_name = "BULLISH_MOMENTUM_CONTINUATION"
-                    reasoning = f"Bullish Momentum Continuation: Solid green candle ({active_c['body_ratio']*100:.0f}% body) expanding upward in {trend} with continuous buyer control."
-
-            # 1E. Uptrend Dip Pullback Ready for Continuation
-            elif active_c["color"] == "RED" and pos >= 0.45 and active_c["body_ratio"] <= 0.40 and active_c["lower_wick_ratio"] >= 0.15:
-                direction = "CALL"
-                confidence = 86.0
-                grade = "B+"
-                rejection_wick = True
-                level_name = "Uptrend Value Dip"
-                pattern_name = "BULLISH_PULLBACK_ENTRY"
-                reasoning = f"Uptrend Value Retracement: Shallow red pullback into dynamic support ({pos*100:.0f}% pos) with dip absorption. Trend following entry aligned with {trend}."
-
-            else:
-                direction = "SKIP"
-                confidence = 55.0
-                pattern_name = "BULLISH_PAUSE"
-                reasoning = f"Uptrend pause in {trend}. Candle structure indecisive ({active_c['color']}, pos {pos*100:.0f}%), awaiting confirmed pullback absorption wick or breakout."
-
-        # SETUP 2: BEARISH ENVIRONMENTS (STRONG_BEARISH or MILD_BEARISH)
-        elif trend in ["STRONG_BEARISH", "MILD_BEARISH"]:
-            # 2A. Support Floor Zone & Bounce Protection (Lower 32% of channel: pos >= 0.68)
-            if pos >= 0.68:
-                # If strong floor buyer bounce wick (>= 20%) or green candle at floor:
-                if active_c["lower_wick_ratio"] >= 0.20 or (active_c["color"] == "GREEN" and active_c["body_ratio"] >= 0.25):
-                    # Counter-trend CALL only if at extreme floor (pos >= 0.84) with clean bounce
-                    if pos >= 0.84 and active_c["lower_wick_ratio"] >= 0.22:
-                        direction = "CALL"
-                        confidence = 88.0 + (active_c["lower_wick_ratio"] * 10.0)
-                        grade = "A"
-                        rejection_wick = True
-                        level_name = "Support Floor Bounce"
-                        pattern_name = "SUPPORT_FLOOR_BOUNCE"
-                        reasoning = f"Downtrend Floor Exhaustion: Buyers actively defended support floor ({pos*100:.0f}% pos) with {active_c['lower_wick_ratio']*100:.0f}% lower bounce wick."
-                    else:
-                        direction = "SKIP"
-                        confidence = 55.0
-                        pattern_name = "BEARISH_SUPPORT_WAIT"
-                        reasoning = f"Price at support floor ({pos*100:.0f}% pos) with buyer defense. Awaiting rally bounce before next PUT."
-                # Bearish Breakdown Expansion: Red candle with clean momentum pushing THROUGH floor
-                elif active_c["color"] == "RED" and active_c["body_ratio"] >= 0.32 and active_c["lower_wick_ratio"] <= 0.15 and red_streak < 5:
-                    direction = "PUT"
-                    confidence = 89.0 + (active_c["body_ratio"] * 8.0)
-                    grade = "A"
-                    rejection_wick = False
-                    level_name = "Bearish Floor Breakdown"
-                    pattern_name = "BEARISH_MOMENTUM_CONTINUATION"
-                    reasoning = f"Bearish Floor Breakdown: Institutional selling expanding through floor ({pos*100:.0f}% pos) with strong red body ({active_c['body_ratio']*100:.0f}%)."
-                else:
-                    direction = "SKIP"
-                    confidence = 55.0
-                    pattern_name = "BEARISH_SUPPORT_WAIT"
-                    reasoning = f"Price inside lower floor zone ({pos*100:.0f}% pos). Lacks verified breakdown volume. Pausing to avoid selling into support."
-
-            # 2B. Strong Bullish Trend-Shift Impulse
-            elif active_c["color"] == "GREEN" and active_c["body_ratio"] >= 0.50 and active_c["h"] >= (prev_c["h"] * 1.1):
-                direction = "CALL"
-                confidence = 87.0
-                grade = "A"
-                rejection_wick = False
-                level_name = "Bullish Trend Reversal Impulse"
+        if up_prob >= strictness_cfg.min_confidence and diff >= 4.0:
+            # Candidate UP / CALL trade
+            if "Bullish Engulfing Breakout" in up_confluences:
                 pattern_name = "BULLISH_ENGULFING_BREAKOUT"
-                reasoning = f"Bullish Impulse Breakout: Heavy institutional buying formed an engulfing green candle ({active_c['body_ratio']*100:.0f}% body) overpowering prior downtrend."
-
-            # 2C. Rally Shooting Star Rejection (Price rallied into resistance/premium pos <= 0.62 with clean upper rejection wick)
-            elif pos <= 0.62 and active_c["upper_wick_ratio"] >= 0.24 and (active_c["color"] == "RED" or active_c["upper_wick_ratio"] >= 0.30):
-                direction = "PUT"
-                confidence = 89.0 + (active_c["upper_wick_ratio"] * 12.0)
-                grade = "A+"
-                rejection_wick = True
-                level_name = "Bearish Dynamic Rally Rejection"
-                pattern_name = "BEARISH_STRONG_STAR_REJECTION"
-                reasoning = f"A+ Downtrend Rally Rejection: Institutional selling rejected higher prices at dynamic resistance ({pos*100:.0f}% pos) with a {active_c['upper_wick_ratio']*100:.0f}% upper rejection wick. Trend aligned with {trend}."
-
-            # 2D. Solid Bearish Momentum Expansion (Red candle in mid-channel with room to floor)
-            elif active_c["color"] == "RED" and active_c["body_ratio"] >= 0.22 and pos < 0.68:
-                if red_streak >= 5 and (pos >= 0.62 or active_c["body_ratio"] < 0.28):
-                    direction = "SKIP"
-                    confidence = 55.0
-                    pattern_name = "BEARISH_EXHAUSTION_WAIT"
-                    reasoning = f"Downtrend Climax ({red_streak} red candles approaching floor). Awaiting rally bounce before next PUT."
-                else:
-                    direction = "PUT"
-                    confidence = 88.0 + (active_c["body_ratio"] * 8.0)
-                    grade = "A"
-                    rejection_wick = active_c["upper_wick_ratio"] >= 0.15
-                    level_name = "Bearish Momentum Expansion"
-                    pattern_name = "BEARISH_MOMENTUM_CONTINUATION"
-                    reasoning = f"Bearish Momentum Continuation: Solid red candle ({active_c['body_ratio']*100:.0f}% body) expanding downward in {trend} with continuous seller control."
-
-            # 2E. Downtrend Bounce Ready for Continuation
-            elif active_c["color"] == "GREEN" and pos <= 0.55 and active_c["body_ratio"] <= 0.40 and active_c["upper_wick_ratio"] >= 0.15:
-                direction = "PUT"
-                confidence = 86.0
-                grade = "B+"
-                rejection_wick = True
-                level_name = "Downtrend Value Bounce"
-                pattern_name = "BEARISH_RALLY_ENTRY"
-                reasoning = f"Downtrend Value Retracement: Shallow green bounce into dynamic resistance ({pos*100:.0f}% pos) with rally rejection. Trend following entry aligned with {trend}."
-
+                level_name = "Bullish Engulfing Expansion"
+            elif any("Hammer" in c for c in up_confluences) or lower_wick >= 0.22:
+                pattern_name = "BULLISH_STRONG_HAMMER_REJECTION"
+                level_name = "Dynamic Support Absorption"
+            elif pos >= 0.70:
+                pattern_name = "SUPPORT_FLOOR_BOUNCE"
+                level_name = "Support Floor Defense"
+            elif "Confirmed Resistance Breakout Expansion" in up_confluences:
+                pattern_name = "BULLISH_CEILING_BREAKOUT"
+                level_name = "Ceiling Breakout Expansion"
+            elif trend in ["STRONG_BULLISH", "MILD_BULLISH"]:
+                pattern_name = "BULLISH_MOMENTUM_CONTINUATION"
+                level_name = "Bullish Momentum Zone"
             else:
-                direction = "SKIP"
-                confidence = 55.0
-                pattern_name = "BEARISH_PAUSE"
-                reasoning = f"Downtrend pause in {trend}. Candle structure indecisive ({active_c['color']}, pos {pos*100:.0f}%), awaiting confirmed rally rejection wick or breakdown."
-
-        # SETUP 3: SIDEWAYS / CONSOLIDATION RANGE
-        elif trend == "SIDEWAYS_CONSOLIDATION":
-            # 3A. Range Support Floor Defence (Bottom half pos >= 0.48: Green candle or lower bounce wick)
-            if pos >= 0.48 and (active_c["color"] == "GREEN" or active_c["lower_wick_ratio"] >= 0.16):
-                direction = "CALL"
-                confidence = 88.0 + (active_c["lower_wick_ratio"] * 10.0)
-                grade = "A"
-                rejection_wick = active_c["lower_wick_ratio"] >= 0.16
-                level_name = "Range Support Boundary"
                 pattern_name = "RANGE_SUPPORT_BOUNCE"
-                reasoning = f"Sideways Range Support Defense: Price in lower channel boundary ({pos*100:.0f}% pos) bouncing upward with {active_c['lower_wick_ratio']*100:.0f}% lower wick."
+                level_name = "Range Support Defense"
 
-            # 3B. Range Resistance Ceiling Defence (Top half pos <= 0.52: Red candle or upper rejection wick)
-            elif pos <= 0.52 and (active_c["color"] == "RED" or active_c["upper_wick_ratio"] >= 0.16):
-                direction = "PUT"
-                confidence = 88.0 + (active_c["upper_wick_ratio"] * 10.0)
-                grade = "A"
-                rejection_wick = active_c["upper_wick_ratio"] >= 0.16
-                level_name = "Range Resistance Boundary"
-                pattern_name = "RANGE_RESISTANCE_REJECTION"
-                reasoning = f"Sideways Range Resistance Rejection: Price in upper channel boundary ({pos*100:.0f}% pos) rejecting downward with {active_c['upper_wick_ratio']*100:.0f}% upper wick."
-
-            # 3C. Mid-Channel Momentum Breakout Impulse
-            elif active_c["body_ratio"] >= 0.35:
-                direction = "CALL" if active_c["color"] == "GREEN" else "PUT"
-                confidence = 86.0
-                grade = "B+"
-                rejection_wick = False
-                level_name = "Consolidation Range Expansion"
-                pattern_name = "RANGE_BREAKOUT_IMPULSE"
-                reasoning = f"Range Momentum Expansion: {active_c['color']} candle breaking out with strong volume ({active_c['body_ratio']*100:.0f}% body)."
-
-            else:
-                direction = "SKIP"
-                confidence = 55.0
-                pattern_name = "RANGE_CHOP"
-                reasoning = "Consolidation midpoint with flat candle body. Awaiting boundary defense or breakout."
-
-        else:
-            direction = "SKIP"
-            confidence = 55.0
-            pattern_name = "MARKET_INDECISIVE"
-            reasoning = "Market structure indecisive. Awaiting confirmed confluence."
-
-        # AI Self-Learned Protection and Edge Enforcement
-        if direction in ["CALL", "PUT"]:
-            wick_for_eval = active_c["lower_wick_ratio"] if direction == "CALL" else active_c["upper_wick_ratio"]
-            opposing_wick = active_c["upper_wick_ratio"] if direction == "CALL" else active_c["lower_wick_ratio"]
-            streak = green_streak if direction == "CALL" else red_streak
+            # Self-learning verification
             is_allowed, conf_delta, learner_rationale = strategy_learner.check_pattern_allowed(
                 pattern_key=pattern_name,
-                candle_color=active_c["color"],
-                wick_ratio=wick_for_eval,
+                candle_color=c_color,
+                wick_ratio=lower_wick,
                 trend=trend,
-                direction=direction,
+                direction="CALL",
                 pos_ratio=pos,
-                streak=streak,
-                opposing_wick_ratio=opposing_wick,
-                body_ratio=active_c["body_ratio"]
+                streak=green_streak,
+                opposing_wick_ratio=upper_wick,
+                body_ratio=body_ratio
             )
-            confidence += conf_delta
+            up_prob = min(96.0, max(50.0, up_prob + conf_delta))
             if not is_allowed:
-                reasoning = learner_rationale
                 direction = "SKIP"
-            elif conf_delta != 0:
-                reasoning = f"{reasoning} | {learner_rationale}"
+                confidence = up_prob
+                reasoning = f"UP setup ({up_prob:.1f}%) filtered: {learner_rationale}"
+            elif up_prob < strictness_cfg.min_confidence:
+                direction = "SKIP"
+                confidence = up_prob
+                reasoning = f"UP setup ({up_prob:.1f}%) below strictness threshold ({strictness_cfg.min_confidence}%)."
+            else:
+                direction = "CALL"
+                confidence = up_prob
+                grade = "A+" if confidence >= 90.0 else ("A" if confidence >= 82.0 else "B+")
+                rejection_wick = lower_wick >= 0.18
+                confl_text = "; ".join(up_confluences[-3:]) if up_confluences else "Bullish candle alignment"
+                reasoning = f"UP (CALL) Probability Edge ({up_prob:.1f}% vs {down_prob:.1f}% DOWN): {confl_text}."
+                if conf_delta != 0:
+                    reasoning += f" | {learner_rationale}"
 
-        confidence = min(96.0, max(50.0, confidence))
+        elif down_prob >= strictness_cfg.min_confidence and diff <= -4.0:
+            # Candidate DOWN / PUT trade
+            if "Bearish Engulfing Breakdown" in down_confluences:
+                pattern_name = "BEARISH_ENGULFING_BREAKDOWN"
+                level_name = "Bearish Engulfing Expansion"
+            elif any("Shooting Star" in c for c in down_confluences) or upper_wick >= 0.22:
+                pattern_name = "BEARISH_STRONG_STAR_REJECTION"
+                level_name = "Dynamic Resistance Rejection"
+            elif pos <= 0.30:
+                pattern_name = "RESISTANCE_CEILING_REVERSAL"
+                level_name = "Resistance Ceiling Rejection"
+            elif "Confirmed Support Breakdown Expansion" in down_confluences:
+                pattern_name = "BEARISH_FLOOR_BREAKDOWN"
+                level_name = "Floor Breakdown Expansion"
+            elif trend in ["STRONG_BEARISH", "MILD_BEARISH"]:
+                pattern_name = "BEARISH_MOMENTUM_CONTINUATION"
+                level_name = "Bearish Momentum Zone"
+            else:
+                pattern_name = "RANGE_RESISTANCE_REJECTION"
+                level_name = "Range Resistance Rejection"
 
-        # Enforce strictness tier threshold
-        if direction != "SKIP" and confidence < strictness_cfg.min_confidence:
-            reasoning = f"Setup ({direction} @ {confidence:.1f}%) filtered out by Strictness Level {strictness_cfg.level} ({strictness_cfg.name}). Demands >= {strictness_cfg.min_confidence}% confidence."
-            direction = "SKIP"
+            # Self-learning verification
+            is_allowed, conf_delta, learner_rationale = strategy_learner.check_pattern_allowed(
+                pattern_key=pattern_name,
+                candle_color=c_color,
+                wick_ratio=upper_wick,
+                trend=trend,
+                direction="PUT",
+                pos_ratio=pos,
+                streak=red_streak,
+                opposing_wick_ratio=lower_wick,
+                body_ratio=body_ratio
+            )
+            down_prob = min(96.0, max(50.0, down_prob + conf_delta))
+            if not is_allowed:
+                direction = "SKIP"
+                confidence = down_prob
+                reasoning = f"DOWN setup ({down_prob:.1f}%) filtered: {learner_rationale}"
+            elif down_prob < strictness_cfg.min_confidence:
+                direction = "SKIP"
+                confidence = down_prob
+                reasoning = f"DOWN setup ({down_prob:.1f}%) below strictness threshold ({strictness_cfg.min_confidence}%)."
+            else:
+                direction = "PUT"
+                confidence = down_prob
+                grade = "A+" if confidence >= 90.0 else ("A" if confidence >= 82.0 else "B+")
+                rejection_wick = upper_wick >= 0.18
+                confl_text = "; ".join(down_confluences[-3:]) if down_confluences else "Bearish candle alignment"
+                reasoning = f"DOWN (PUT) Probability Edge ({down_prob:.1f}% vs {up_prob:.1f}% UP): {confl_text}."
+                if conf_delta != 0:
+                    reasoning += f" | {learner_rationale}"
 
         return {
             "direction": direction,
             "confidence": round(confidence, 1),
+            "up_probability": round(up_prob, 1),
+            "down_probability": round(down_prob, 1),
+            "probability_spread": round(up_prob - down_prob, 1),
             "current_price": round(base_price, 5),
             "trend": trend,
             "setup_grade": grade,

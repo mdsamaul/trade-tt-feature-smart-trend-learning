@@ -1061,6 +1061,26 @@
             </div>
           </div>
 
+          <!-- Bidirectional Candle Probability Meter -->
+          <div class="candle-probability-container" style="background: rgba(14, 18, 28, 0.75); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--call-color); box-shadow: 0 0 8px var(--call-color);"></span>
+                <span class="font-mono" style="font-size: 0.82rem; font-weight: 700; color: var(--call-color);">UP (CALL): <span id="probUpVal">50.0%</span></span>
+              </div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700;" id="probEdgeText">BIDIRECTIONAL EVALUATION</div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="font-mono" style="font-size: 0.82rem; font-weight: 700; color: var(--put-color);">DOWN (PUT): <span id="probDownVal">50.0%</span></span>
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--put-color); box-shadow: 0 0 8px var(--put-color);"></span>
+              </div>
+            </div>
+            <!-- Dual Comparative Bar -->
+            <div style="width: 100%; height: 8px; background: rgba(30, 40, 60, 0.6); border-radius: 4px; overflow: hidden; display: flex;">
+              <div id="probUpBar" style="height: 100%; width: 50%; background: linear-gradient(90deg, #00c853, var(--call-color)); transition: width 0.5s ease;"></div>
+              <div id="probDownBar" style="height: 100%; width: 50%; background: linear-gradient(90deg, var(--put-color), #d50000); transition: width 0.5s ease;"></div>
+            </div>
+          </div>
+
           <!-- Cropped Frame Ingestion Snapshot -->
           <div class="cropped-preview-box">
             <img id="croppedPreviewImg" src="" alt="Cropped Chart Canvas" style="display: none;">
@@ -1895,6 +1915,36 @@
         if (tp) tp.textContent = dec.pattern_name || '--';
 
         aiRationaleText.textContent = dec.reasoning;
+
+        // Dynamic Bidirectional Probability Meter Update
+        const upProb = dec.up_probability !== undefined ? dec.up_probability : (dec.direction === 'CALL' ? dec.confidence : (dec.direction === 'PUT' ? (100 - dec.confidence) : 50.0));
+        const downProb = dec.down_probability !== undefined ? dec.down_probability : (dec.direction === 'PUT' ? dec.confidence : (dec.direction === 'CALL' ? (100 - dec.confidence) : 50.0));
+        
+        const probUpEl = document.getElementById('probUpVal');
+        const probDownEl = document.getElementById('probDownVal');
+        const probUpBar = document.getElementById('probUpBar');
+        const probDownBar = document.getElementById('probDownBar');
+        const probEdgeText = document.getElementById('probEdgeText');
+        
+        if (probUpEl) probUpEl.textContent = `${upProb.toFixed(1)}%`;
+        if (probDownEl) probDownEl.textContent = `${downProb.toFixed(1)}%`;
+        
+        const total = (upProb + downProb) || 100;
+        const upPct = Math.min(95, Math.max(5, (upProb / total) * 100));
+        const downPct = 100 - upPct;
+        
+        if (probUpBar) probUpBar.style.width = `${upPct.toFixed(1)}%`;
+        if (probDownBar) probDownBar.style.width = `${downPct.toFixed(1)}%`;
+        
+        if (probEdgeText) {
+          if (upProb >= downProb + 4.0) {
+            probEdgeText.innerHTML = `🟢 <span style="color: var(--call-color)">UP PROBABILITY EDGE (+${(upProb - downProb).toFixed(1)}%)</span>`;
+          } else if (downProb >= upProb + 4.0) {
+            probEdgeText.innerHTML = `🔴 <span style="color: var(--put-color)">DOWN PROBABILITY EDGE (+${(downProb - upProb).toFixed(1)}%)</span>`;
+          } else {
+            probEdgeText.innerHTML = `⚖️ <span style="color: var(--neon-gold)">BALANCED / NEUTRAL CHOP</span>`;
+          }
+        }
       }
 
       // Outcome Verification Audio & History
