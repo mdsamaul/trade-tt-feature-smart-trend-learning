@@ -30,20 +30,20 @@
     },
     "BULLISH_STRONG_HAMMER_REJECTION": {
       "name": "BULLISH_STRONG_HAMMER_REJECTION",
-      "total_trades": 41,
-      "wins": 36,
+      "total_trades": 42,
+      "wins": 37,
       "losses": 5,
       "draws": 0,
-      "win_rate": 87.8,
+      "win_rate": 88.1,
       "consecutive_losses": 0,
       "status": "BOOSTED",
-      "last_feedback": "WIN: Bullish confirmation: Price rose by +0.00020 (1.08402 -> 1.08422). Trend STRONG_BEARISH buyer dominance prevailed.",
+      "last_feedback": "WIN: Bullish confirmation: Price rose by +0.00020 (1.08621 -> 1.08641). Trend STRONG_BEARISH buyer dominance prevailed.",
       "last_loss_root_cause": "CALL failed against dominant STRONG_BEARISH market (-0.00020). Sellers overpowered buyer attempt.",
       "loss_causes": [
         "AI DEFENSE ACTIVATED: Enforced position bounds (pos >= 0.38) and consecutive loss cooldown.",
         "AI DEFENSE ACTIVATED: In BEARISH trends, require verified support floor bounce (lower wick >= 18%) before taking CALL."
       ],
-      "learned_at": "2026-10-20 08:12:00"
+      "learned_at": "2026-10-20 09:24:59"
     },
     "BULLISH_MOMENTUM_CONTINUATION": {
       "name": "BULLISH_MOMENTUM_CONTINUATION",
@@ -291,6 +291,20 @@
     "DEFENSE_COUNTER_TREND_BULLISH_TRAP: AI DEFENSE ACTIVATED: In BULLISH trends, require verified resistance ceiling rejection (upper wick >= 18%) before taking PUT."
   ],
   "trades_history": [
+    {
+      "id": "81fe3ba3",
+      "timestamp": "09:24:01",
+      "direction": "CALL",
+      "entry_price": 1.08621,
+      "close_price": 1.08641,
+      "outcome": "WIN",
+      "pnl": 85.0,
+      "confidence": 96.0,
+      "pattern_name": "BULLISH_STRONG_HAMMER_REJECTION",
+      "trend": "STRONG_BEARISH",
+      "outcome_reason": "Bullish confirmation: Price rose by +0.00020 (1.08621 -> 1.08641). Trend STRONG_BEARISH buyer dominance prevailed.",
+      "learning_insight": "Confirmed winning edge on BULLISH_STRONG_HAMMER_REJECTION: Trend-following CALL reinforced."
+    },
     {
       "id": "4d3e8d9e",
       "timestamp": "08:48:00",
@@ -1289,6 +1303,6 @@
   "persistence_status": {
     "protected": true,
     "dual_backup_active": true,
-    "last_sync": "2026-10-20 08:49:00"
+    "last_sync": "2026-10-20 09:24:59"
   }
 }
