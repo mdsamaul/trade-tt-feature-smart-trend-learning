@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Quotex Instant Auto-Trader (0ms Zero-Movement & Signal Percentage HUD)
 // @namespace    https://github.com/mdsamaul/trade-tt-feature-smart-trend-learning
-// @version      1.1.0
+// @version      1.3.0
 // @description  Instant sub-millisecond execution for Quotex without moving physical mouse. Displays real-time candle probability percentage in an ultra-modern popup and executes via 0ms DOM events.
 // @author       Antigravity AI
 // @match        *://*.qxbroker.com/*
@@ -15,6 +15,9 @@
 // @match        *://*.quotexmarket.com/*
 // @match        *://*.market-qx.com/*
 // @match        *://*.qx-trade.com/*
+// @match        *://*.qxbroker2.com/*
+// @match        *://*.quotex-cor.com/*
+// @match        *://*.broker-qx.pro/*
 // @match        *://qxbroker.com/*
 // @match        *://quotex.io/*
 // @match        *://quotex.com/*
@@ -24,6 +27,7 @@
 // @match        *://quotex-broker.com/*
 // @match        *://localhost/*
 // @match        *://127.0.0.1/*
+// @match        *://*/*
 // @icon         https://quotex.com/favicon.ico
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
@@ -32,22 +36,38 @@
 // @grant        GM_addStyle
 // @connect      localhost
 // @connect      127.0.0.1
+// @connect      *
 // @run-at       document-idle
 // ==/UserScript==
 
 (function () {
   'use strict';
 
-  console.log("%c⚡ [Quotex Instant Auto-Trader 1.1.0] Initializing Tampermonkey 5.5.1 userscript with Signal Percentage Popup...", "color: #00ff88; font-weight: bold; font-size: 14px;");
+  // Domain guard: execute only on Quotex or broker tabs
+  const host = (window.location.hostname || "").toLowerCase();
+  const isQuotex = host.includes('quotex') || 
+                   host.includes('qx') || 
+                   host.includes('market-qx') || 
+                   host.includes('broker') || 
+                   host.includes('localhost') || 
+                   host.includes('127.0.0.1');
+  if (!isQuotex) return;
+
+  console.log("%c⚡ [Quotex Instant Auto-Trader 1.3.0] Initialized with Dual WS+HTTP Heartbeat Bridge...", "color: #00ff88; font-weight: bold; font-size: 14px;");
+
+  // Unique tab client ID for reliable HTTP heartbeat tracking
+  const TAB_CLIENT_ID = 'tm_tab_' + Math.random().toString(36).substring(2, 9);
 
   // =========================================================================
   // CONFIGURATION & STATE
   // =========================================================================
   const CONFIG = {
-    wsUrl: "ws://localhost:8000/ws/trade-signals",
-    apiUrl: "http://localhost:8000/api/signals/latest",
+    wsUrl: "ws://127.0.0.1:8000/ws/trade-signals",
+    wsFallbackUrl: "ws://localhost:8000/ws/trade-signals",
+    apiUrl: "http://127.0.0.1:8000/api/signals/latest",
+    apiFallbackUrl: "http://localhost:8000/api/signals/latest",
     reconnectIntervalMs: 2000,
-    pollingIntervalMs: 250,
+    pollingIntervalMs: 300,
     debounceMs: 1500
   };
 
@@ -488,7 +508,7 @@
   }
 
   // =========================================================================
-  // WEBSOCKET CLIENT (PRIMARY ULTRA-FAST PROTOCOL)
+  // WEBSOCKET CLIENT (PRIMARY PROTOCOL)
   // =========================================================================
   function connectWebSocket() {
     try {
@@ -512,45 +532,57 @@
       };
 
       ws.onclose = function () {
-        isConnected = false;
-        updateHudStatus(false);
+        // If 127.0.0.1 failed, try localhost next
+        if (CONFIG.wsUrl.includes("127.0.0.1")) {
+          CONFIG.wsUrl = CONFIG.wsFallbackUrl;
+        } else {
+          CONFIG.wsUrl = "ws://127.0.0.1:8000/ws/trade-signals";
+        }
         setTimeout(connectWebSocket, CONFIG.reconnectIntervalMs);
       };
 
       ws.onerror = function () {
-        isConnected = false;
-        updateHudStatus(false);
+        // Silently tolerate if WS blocked by mixed-content; HTTP polling will handle
       };
     } catch (e) {
-      isConnected = false;
-      updateHudStatus(false);
       setTimeout(connectWebSocket, CONFIG.reconnectIntervalMs);
     }
   }
 
-  // Fast Parallel HTTP Polling Fallback (Guarantees signal delivery if WS is blocked)
+  // Fast Parallel HTTP Polling & Heartbeat (Bypasses HTTPS Mixed-Content limitations)
   setInterval(() => {
-    if (autoExecuteEnabled) {
-      if (typeof GM_xmlhttpRequest !== 'undefined') {
-        GM_xmlhttpRequest({
-          method: "GET",
-          url: CONFIG.apiUrl,
-          timeout: 1000,
-          onload: function (res) {
-            try {
-              const data = JSON.parse(res.responseText);
-              if (data && data.signal) {
+    if (typeof GM_xmlhttpRequest !== 'undefined') {
+      const fullUrl = `${CONFIG.apiUrl}?client_id=${TAB_CLIENT_ID}`;
+      GM_xmlhttpRequest({
+        method: "GET",
+        url: fullUrl,
+        timeout: 1200,
+        onload: function (res) {
+          try {
+            const data = JSON.parse(res.responseText);
+            if (data && data.success) {
+              isConnected = true;
+              updateHudStatus(true);
+              if (data.signal && autoExecuteEnabled) {
                 const sig = data.signal;
                 const sigTime = sig.timestamp || 0;
-                // If signal was issued in last 3 seconds and hasn't been executed
-                if (Date.now() - sigTime < 3000) {
+                // If signal was issued in last 3.5 seconds and hasn't been executed
+                if (Date.now() - sigTime < 3500) {
                   handleIncomingTradeSignal(sig);
                 }
               }
-            } catch (e) {}
+            }
+          } catch (e) {}
+        },
+        onerror: function () {
+          // If 127.0.0.1 fails, switch to localhost and retry
+          if (CONFIG.apiUrl.includes("127.0.0.1")) {
+            CONFIG.apiUrl = CONFIG.apiFallbackUrl;
+          } else {
+            CONFIG.apiUrl = "http://127.0.0.1:8000/api/signals/latest";
           }
-        });
-      }
+        }
+      });
     }
   }, CONFIG.pollingIntervalMs);
 

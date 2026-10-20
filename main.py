@@ -43,12 +43,22 @@ class SignalBroadcaster:
     """Manages real-time WebSocket connections and broadcasts instant trade signals to Tampermonkey userscripts."""
     def __init__(self):
         self.active_connections: List[WebSocket] = []
+        self.http_heartbeats: Dict[str, float] = {}
         self.latest_signal: Optional[Dict[str, Any]] = None
+
+    def record_heartbeat(self, client_id: str):
+        self.http_heartbeats[client_id] = time.time()
+
+    def get_active_client_count(self) -> int:
+        now = time.time()
+        # Keep clients active if seen within the last 15 seconds
+        self.http_heartbeats = {cid: t for cid, t in self.http_heartbeats.items() if now - t < 15.0}
+        return len(self.active_connections) + len(self.http_heartbeats)
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
-        logger.info(f"⚡ [TAMPERMONKEY CONNECTED] Quotex Userscript connected via WebSocket. Active tabs: {len(self.active_connections)}")
+        logger.info(f"⚡ [TAMPERMONKEY CONNECTED] Quotex Userscript connected via WebSocket. Active tabs: {self.get_active_client_count()}")
         try:
             await websocket.send_json({
                 "type": "CONNECTION_ESTABLISHED",
@@ -61,15 +71,16 @@ class SignalBroadcaster:
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
-            logger.info(f"Tampermonkey client disconnected. Remaining tabs: {len(self.active_connections)}")
+            logger.info(f"Tampermonkey client disconnected. Remaining tabs: {self.get_active_client_count()}")
 
     async def broadcast_signal(self, signal: Dict[str, Any]):
         self.latest_signal = signal
-        if not self.active_connections:
+        active_count = self.get_active_client_count()
+        if active_count == 0:
             logger.info("No active Tampermonkey userscripts connected. Fallback to hardware mouse clicking if enabled.")
             return
 
-        logger.info(f"⚡ [INSTANT DOM DISPATCH] Broadcasting {signal.get('direction')} to {len(self.active_connections)} Tampermonkey tabs (0ms zero-movement)!")
+        logger.info(f"⚡ [INSTANT DOM DISPATCH] Broadcasting {signal.get('direction')} to {active_count} Tampermonkey tab(s) (0ms zero-movement)!")
         disconnected = []
         for ws in list(self.active_connections):
             try:
@@ -274,7 +285,7 @@ async def analyze_and_trade(payload: AnalyzeRequest):
                 await signal_broadcaster.broadcast_signal(signal_data)
 
                 # Fallback to physical mouse clicking ONLY if no Tampermonkey tab is active and auto_clicker is enabled
-                if len(signal_broadcaster.active_connections) == 0 and auto_clicker.config.enabled:
+                if signal_broadcaster.get_active_client_count() == 0 and auto_clicker.config.enabled:
                     auto_clicker.execute_click(direction)
 
         return {
@@ -438,7 +449,7 @@ async def auto_cycle(payload: AutoCycleRequest):
             await signal_broadcaster.broadcast_signal(signal_data)
 
             # Fallback to physical mouse clicking ONLY if no Tampermonkey tab is active and auto_clicker is enabled
-            if len(signal_broadcaster.active_connections) == 0 and auto_clicker.config.enabled:
+            if signal_broadcaster.get_active_client_count() == 0 and auto_clicker.config.enabled:
                 auto_clicker.execute_click(direction)
         elif direction in ["CALL", "PUT"] and not payload.execute_trade:
             action = f"SIGNAL_ACTIVE_{direction}_PREVIEW"
@@ -617,12 +628,14 @@ async def websocket_trade_signals(websocket: WebSocket):
 
 
 @app.get("/api/signals/latest")
-async def get_latest_signal():
+async def get_latest_signal(client_id: Optional[str] = None):
     """Returns the most recent trade signal for Tampermonkey HTTP polling fallback."""
+    if client_id:
+        signal_broadcaster.record_heartbeat(client_id)
     return {
         "success": True,
         "signal": signal_broadcaster.latest_signal,
-        "connected_clients": len(signal_broadcaster.active_connections)
+        "connected_clients": signal_broadcaster.get_active_client_count()
     }
 
 
@@ -630,7 +643,7 @@ async def get_latest_signal():
 async def get_signals_status():
     """Returns status of connected Tampermonkey userscript clients."""
     return {
-        "connected_tampermonkey_clients": len(signal_broadcaster.active_connections),
+        "connected_tampermonkey_clients": signal_broadcaster.get_active_client_count(),
         "latest_signal": signal_broadcaster.latest_signal
     }
 
@@ -657,7 +670,7 @@ async def test_broadcast_signal(payload: Dict[str, Any]):
     await signal_broadcaster.broadcast_signal(signal)
     return {
         "success": True,
-        "broadcasted_to": len(signal_broadcaster.active_connections),
+        "broadcasted_to": signal_broadcaster.get_active_client_count(),
         "signal": signal
     }
 
