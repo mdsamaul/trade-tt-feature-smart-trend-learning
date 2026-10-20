@@ -549,6 +549,18 @@ async def reset_session():
     return {"success": True, "message": "Session reset successfully", "session": trading_session.get_stats().model_dump()}
 
 
+@app.post("/api/strategy/reset-cooldowns")
+async def reset_pattern_cooldowns():
+    """Resets defensive cooldowns and consecutive loss counters on all patterns."""
+    with strategy_learner.lock:
+        for p in strategy_learner.memory.values():
+            p.consecutive_losses = 0
+            if p.status == "DEFENSIVE_COOLDOWN":
+                p.status = "BOOSTED" if p.win_rate >= 75.0 else "ACTIVE"
+        strategy_learner._save_memory()
+    return {"success": True, "message": "All pattern defensive cooldowns unlocked", "summary": strategy_learner.get_learning_summary()}
+
+
 @app.get("/api/config")
 async def get_config():
     """Returns runtime AI and strategy configuration."""

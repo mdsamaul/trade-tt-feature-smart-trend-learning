@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Quotex Instant Auto-Trader (Native)",
+  "version": "1.3.0",
+  "description": "Zero-latency 0ms DOM Execution for Quotex Trading Platform",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "*://*.market-qx.info/*",
+    "*://*.market-qx.pro/*",
+    "*://*.qxbroker.com/*",
+    "*://*.quotex.io/*",
+    "*://*.quotex.com/*",
+    "*://*.quotex-cor.com/*",
+    "http://127.0.0.1:8000/*",
+    "http://localhost:8000/*",
+    "*://*/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.market-qx.info/*",
+        "*://*.market-qx.pro/*",
+        "*://*.qxbroker.com/*",
+        "*://*.quotex.io/*",
+        "*://*.quotex.com/*",
+        "*://*.quotex-cor.com/*",
+        "*://*/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

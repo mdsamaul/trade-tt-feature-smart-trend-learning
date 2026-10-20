@@ -516,13 +516,20 @@ class StrategyLearner:
                     return False, -30.0, f"[AI Self-Learned Protection]: Pattern '{pattern_key}' learned to be high-loss ({mem.losses}L / {mem.wins}W, Win rate: {mem.win_rate:.0f}%). BLOCKED to prevent repeating loss."
 
             if mem.status == "DEFENSIVE_COOLDOWN" or mem.consecutive_losses >= 1:
-                # If 2 consecutive losses on this pattern: enforce pause for capital defense
-                if mem.consecutive_losses >= 2:
-                    return False, -25.0, f"[AI Defensive Shield]: Pattern '{pattern_key}' recently took 2 consecutive losses. Paused to prevent repeat revenge losses."
+                # If high historical win rate (>= 75%), don't lock forever. Require clean A+ confluence.
+                if mem.win_rate >= 75.0 and mem.total_trades >= 5:
+                    if wick_ratio < 0.22 and body_ratio < 0.35:
+                        return False, -15.0, f"[AI Defensive Filter]: Pattern '{pattern_key}' in cooldown. Awaiting clean A+ wick/body confirmation."
+                    else:
+                        return True, 0.0, f"[AI Edge]: High-win-rate pattern '{pattern_key}' ({mem.win_rate:.0f}% WR) permitted on clean confluence."
 
-                # If 1 recent loss: require strict confirmation (>= 32% absorption/rejection wick OR solid body >= 35% with clean alignment)
-                if wick_ratio < 0.32 and (body_ratio < 0.35 or opposing_wick_ratio >= 0.15):
-                    return False, -20.0, f"[AI Defensive Shield]: Pattern '{pattern_key}' recently lost a trade. Paused on marginal setup ({mem.last_loss_root_cause or 'loss cooldown'}) to prevent back-to-back loss."
+                # If 2 consecutive losses on a lower win rate pattern: enforce pause for capital defense
+                if mem.consecutive_losses >= 2:
+                    return False, -25.0, f"[AI Defensive Shield]: Pattern '{pattern_key}' took 2 consecutive losses. Paused to prevent repeat revenge losses."
+
+                # If 1 recent loss: require strict confirmation (>= 28% absorption/rejection wick OR solid body >= 35%)
+                if wick_ratio < 0.28 and (body_ratio < 0.35 or opposing_wick_ratio >= 0.15):
+                    return False, -20.0, f"[AI Defensive Shield]: Pattern '{pattern_key}' recently lost a trade. Paused on marginal setup to prevent back-to-back loss."
 
             if mem.status == "BOOSTED":
                 return True, 4.0, f"[AI Learned Edge]: High-win-rate pattern '{pattern_key}' ({mem.win_rate:.0f}% WR). Boosted with +4% confidence."

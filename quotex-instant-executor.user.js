@@ -8,6 +8,7 @@
 // @match        *://*.quotex.io/*
 // @match        *://*.quotex.com/*
 // @match        *://*.market-qx.pro/*
+// @match        *://*.market-qx.info/*
 // @match        *://*.qxbroker.io/*
 // @match        *://*.qx-broker.com/*
 // @match        *://*.quotex-broker.com/*
@@ -22,6 +23,7 @@
 // @match        *://quotex.io/*
 // @match        *://quotex.com/*
 // @match        *://market-qx.pro/*
+// @match        *://market-qx.info/*
 // @match        *://qxbroker.io/*
 // @match        *://qx-broker.com/*
 // @match        *://quotex-broker.com/*
@@ -239,7 +241,7 @@
           const isGreen = bg.includes('0, 192,') || bg.includes('0, 231,') || bg.includes('15, 175,') ||
                           bg.includes('0, 184,') || bg.includes('0, 255, 136') || bg.includes('#00e793') ||
                           bg.includes('#00ff88') || bg.includes('#0faf59') || bg.includes('rgb(0, 192');
-          const isUpText = text === 'up' || text === 'call' || text === 'выше' || text === 'вверх' ||
+          const isUpText = text.includes('buy') || text === 'up' || text === 'call' || text === 'выше' || text === 'вверх' ||
                            text === 'higher' || cls.includes('call') || (cls.includes('up') && !cls.includes('upload'));
           if (isGreen || isUpText) {
             callBtn = b;
@@ -251,7 +253,7 @@
           const isRed = bg.includes('255, 75,') || bg.includes('255, 59,') || bg.includes('229, 57,') ||
                         bg.includes('255, 51, 102') || bg.includes('#ff3b56') || bg.includes('#ff3366') ||
                         bg.includes('#e53935') || bg.includes('rgb(255, 59');
-          const isDownText = text === 'down' || text === 'put' || text === 'ниже' || text === 'вниз' ||
+          const isDownText = text.includes('sell') || text === 'down' || text === 'put' || text === 'ниже' || text === 'вниз' ||
                              text === 'lower' || cls.includes('put') || cls.includes('down');
           if (isRed || isDownText) {
             putBtn = b;
