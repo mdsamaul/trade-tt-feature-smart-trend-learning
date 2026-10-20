@@ -262,10 +262,13 @@ async def analyze_and_trade(payload: AnalyzeRequest):
                     "action": "EXECUTE",
                     "direction": direction,
                     "confidence": confidence,
+                    "probability": confidence,
+                    "candle_probability": decision_data.get("candle_probability", confidence),
                     "trade_id": trade_opened.id if trade_opened else str(int(time.time())),
                     "timestamp": int(time.time() * 1000),
                     "timeframe": payload.timeframe_seconds,
                     "pattern_name": decision_data.get("pattern_name", "UNKNOWN"),
+                    "candle_color": decision_data.get("candle_color", "GREEN" if direction == "CALL" else "RED"),
                     "source": "AI_AGENT"
                 }
                 await signal_broadcaster.broadcast_signal(signal_data)
@@ -393,13 +396,14 @@ async def auto_cycle(payload: AutoCycleRequest):
         )
 
         direction = decision["direction"]
+        confidence = float(decision.get("confidence", 0.0))
         opened_trade = None
 
         if direction in ["CALL", "PUT"] and payload.execute_trade:
             opened_trade = trading_session.open_trade(
                 direction=direction,
                 entry_price=decision["current_price"],
-                confidence=decision["confidence"],
+                confidence=confidence,
                 rationale=decision["reasoning"],
                 trend=decision["trend"],
                 setup_grade=decision["setup_grade"],
@@ -422,10 +426,13 @@ async def auto_cycle(payload: AutoCycleRequest):
                 "action": "EXECUTE",
                 "direction": direction,
                 "confidence": confidence,
+                "probability": confidence,
+                "candle_probability": decision.get("candle_probability", confidence),
                 "trade_id": opened_trade.id if opened_trade else str(int(time.time())),
                 "timestamp": int(time.time() * 1000),
                 "timeframe": payload.timeframe_seconds,
                 "pattern_name": decision.get("pattern_name", "UNKNOWN"),
+                "candle_color": decision.get("candle_color", "GREEN" if direction == "CALL" else "RED"),
                 "source": "AI_AGENT"
             }
             await signal_broadcaster.broadcast_signal(signal_data)
@@ -632,14 +639,19 @@ async def get_signals_status():
 async def test_broadcast_signal(payload: Dict[str, Any]):
     """Sends a manual test signal to connected Tampermonkey userscript."""
     direction = str(payload.get("direction", "CALL")).upper()
+    confidence = float(payload.get("confidence", 92.5))
     signal = {
         "type": "TRADE_SIGNAL",
         "action": "EXECUTE",
         "direction": direction,
-        "confidence": 95.0,
+        "confidence": confidence,
+        "probability": confidence,
+        "candle_probability": confidence,
         "trade_id": f"test_{int(time.time())}",
         "timestamp": int(time.time() * 1000),
         "timeframe": 60,
+        "pattern_name": "Bullish Continuation" if direction == "CALL" else "Bearish Rejection",
+        "candle_color": "GREEN" if direction == "CALL" else "RED",
         "source": "MANUAL_TEST"
     }
     await signal_broadcaster.broadcast_signal(signal)

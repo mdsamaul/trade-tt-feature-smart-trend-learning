@@ -1403,8 +1403,10 @@
       </div>
       <div class="modal-body">
         <div style="background: rgba(0, 255, 136, 0.08); border: 1px solid rgba(0, 255, 136, 0.3); padding: 14px; border-radius: 6px; font-size: 0.84rem; line-height: 1.5;">
-          🚀 <strong>জিরো-মুভমেন্ট ও ০ মিলি-সেকেন্ড এক্সিকিউশন:</strong><br>
-          মাউস কার্সর স্পর্শ না করেই সরাসরি ব্রাউজারের ভেতর থেকে Quotex-এর UP/DOWN বাটনে তাৎক্ষণিক ক্লিক করে দেয়! এতে ০ সেকেন্ডেই ক্যান্ডেলের একদম সঠিক টাইমে ও অ্যালাইনমেন্টে ট্রেড পড়ে।
+          🚀 <strong>জিরো-মুভমেন্ট, ০ms এক্সিকিউশন ও লাইভ পার্সেন্টেজ পপ-আপ:</strong><br>
+          • <strong>লাইভ পার্সেন্টেজ পপ-আপ:</strong> সিগন্যাল আসলেই Quotex স্ক্রিনে কত % প্রবাবিলিটি (যেমনঃ <code>92.5% UP</code> বা <code>89.0% DOWN</code>) তা বড় পপ-আপ কার্ডে দেখাবে!<br>
+          • <strong>০ms DOM এক্সিকিউশন:</strong> কোনো মাউস নড়াচড়া ছাড়াই সরাসরি কোটেক্স ট্যাবে সাথে সাথে ক্লিক পড়বে।<br>
+          • <strong>বাটন ক্যালিব্রেশন (🎯 Calibrate):</strong> ব্রাউজারের HUD-তে Calibrate বাটনে চাপ দিয়ে Quotex-এর UP ও DOWN বাটনে ১ বার ক্লিক করলেই বাটন পারফেক্টলি লক হয়ে যাবে।
         </div>
 
         <!-- Connection Status Card -->
@@ -1423,7 +1425,7 @@
         <!-- One-Click Install Button -->
         <div style="display: flex; flex-direction: column; gap: 8px;">
           <a href="/quotex-instant-executor.user.js" target="_blank" class="btn btn-success font-mono" style="padding: 12px; text-align: center; text-decoration: none; font-size: 0.92rem; font-weight: 800; background: linear-gradient(135deg, #00ff88, #00c853); color: #000; border-radius: 6px; box-shadow: 0 0 15px rgba(0, 255, 136, 0.3); display: block;">
-            📥 1-Click Install into Tampermonkey 5.5.1
+            📥 1-Click Update/Install into Tampermonkey 5.5.1
           </a>
           <button class="btn btn-secondary font-mono" id="copyTmScriptBtn" style="padding: 8px; font-size: 0.8rem;">
             📋 Copy Script Code to Clipboard (ম্যানুয়াল কপি)
@@ -1435,23 +1437,23 @@
           <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-main);">⚡ Test Instant DOM Click on Quotex Tab:</span>
           <div style="display: flex; gap: 10px;">
             <button class="btn font-mono" id="testTmCallBtn" style="flex: 1; padding: 8px; background: rgba(0, 255, 136, 0.2); color: var(--neon-green); border: 1px solid var(--neon-green); font-weight: 700;">
-              🟢 Send Instant CALL
+              🟢 Send Instant CALL (92.5%)
             </button>
             <button class="btn font-mono" id="testTmPutBtn" style="flex: 1; padding: 8px; background: rgba(255, 51, 102, 0.2); color: var(--neon-red); border: 1px solid var(--neon-red); font-weight: 700;">
-              🔴 Send Instant PUT
+              🔴 Send Instant PUT (89.0%)
             </button>
           </div>
           <div style="font-size: 0.72rem; color: var(--text-muted);" id="tmTestResult">
-            বাটনে চাপ দিলে কোনো মাউস নড়াচড়া ছাড়াই Quotex ট্যাবে সাথে সাথে ক্লিক পড়বে।
+            বাটনে চাপ দিলে Quotex স্ক্রিনে সাথে সাথে পার্সেন্টেজ পপ-আপ উঠবে এবং কোনো মাউস নড়াচড়া ছাড়াই ক্লিক পড়বে।
           </div>
         </div>
 
         <!-- 3-Step Setup Instructions -->
         <div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.5; background: rgba(16, 22, 34, 0.5); padding: 10px 14px; border-radius: 6px;">
           <strong style="color: var(--neon-cyan);">📖 সহজ ৩টি ধাপ:</strong><br>
-          ১. উপরে <strong>"1-Click Install"</strong> বাটনে ক্লিক করে Tampermonkey-তে স্ক্রিপ্টটি ইন্সটল করুন।<br>
-          ২. Quotex ট্যাবটি ওপেন বা রিফ্রেশ করুন। স্ক্রিনের উপরে একটি ছোট সবুজ পিল <code>⚡ AGENT CONNECTED (0ms DOM)</code> দেখতে পাবেন।<br>
-          ৩. ব্যস! এরপর AI সিগন্যাল দিলে মাউস কার্সর স্পর্শ না করেই চোখের পলকে কোটেক্সে ট্রেড পড়বে।
+          ১. উপরে <strong>"1-Click Update/Install"</strong> বাটনে ক্লিক করে Tampermonkey-তে স্ক্রিপ্টটি আপডেট করুন।<br>
+          ২. Quotex ট্যাবটি ওপেন বা রিফ্রেশ করুন। স্ক্রিনের উপরে <code>⚡ AGENT CONNECTED (0ms DOM)</code> পিল দেখতে পাবেন।<br>
+          ৩. ব্যস! সিগন্যাল আসার সাথে সাথে বড় <strong>% Percentage Popup</strong> দেখা যাবে এবং মাউস স্পর্শ না করেই ০ms-এ ট্রেড পড়বে।
         </div>
       </div>
       <div class="modal-footer">
