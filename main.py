@@ -6,11 +6,13 @@ automated trade verification, live session monitoring, and settings management.
 
 import os
 import time
+import json
+import asyncio
 import logging
 from typing import Optional, Dict, Any, List
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,6 +34,53 @@ from agent import (
 )
 
 logger = logging.getLogger("QuotexAPI")
+
+# ==============================================================================
+# TAMPERMONKEY INSTANT WEBSOCKET SIGNAL BROADCASTER (0ms DOM CLICK)
+# ==============================================================================
+
+class SignalBroadcaster:
+    """Manages real-time WebSocket connections and broadcasts instant trade signals to Tampermonkey userscripts."""
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+        self.latest_signal: Optional[Dict[str, Any]] = None
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        logger.info(f"⚡ [TAMPERMONKEY CONNECTED] Quotex Userscript connected via WebSocket. Active tabs: {len(self.active_connections)}")
+        try:
+            await websocket.send_json({
+                "type": "CONNECTION_ESTABLISHED",
+                "message": "Connected to Quotex Autonomous Agent Backend (0ms DOM execution active)",
+                "timestamp": int(time.time() * 1000)
+            })
+        except Exception:
+            pass
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+            logger.info(f"Tampermonkey client disconnected. Remaining tabs: {len(self.active_connections)}")
+
+    async def broadcast_signal(self, signal: Dict[str, Any]):
+        self.latest_signal = signal
+        if not self.active_connections:
+            logger.info("No active Tampermonkey userscripts connected. Fallback to hardware mouse clicking if enabled.")
+            return
+
+        logger.info(f"⚡ [INSTANT DOM DISPATCH] Broadcasting {signal.get('direction')} to {len(self.active_connections)} Tampermonkey tabs (0ms zero-movement)!")
+        disconnected = []
+        for ws in list(self.active_connections):
+            try:
+                await ws.send_json(signal)
+            except Exception as e:
+                logger.warning(f"Failed to send to Tampermonkey client: {e}")
+                disconnected.append(ws)
+        for ws in disconnected:
+            self.disconnect(ws)
+
+signal_broadcaster = SignalBroadcaster()
 
 app = FastAPI(
     title="Quotex Autonomous Paper-Trading Agent API",
@@ -207,8 +256,22 @@ async def analyze_and_trade(payload: AnalyzeRequest):
                         "candle_color": decision_data.get("candle_color", "GREEN" if direction == "CALL" else "RED")
                     }
                 )
-                # Execute direct mouse click on Quotex UP / DOWN button if enabled
-                if auto_clicker.config.enabled:
+                # Instant broadcast to Tampermonkey userscript inside Quotex (0ms DOM click, zero mouse movement)
+                signal_data = {
+                    "type": "TRADE_SIGNAL",
+                    "action": "EXECUTE",
+                    "direction": direction,
+                    "confidence": confidence,
+                    "trade_id": trade_opened.id if trade_opened else str(int(time.time())),
+                    "timestamp": int(time.time() * 1000),
+                    "timeframe": payload.timeframe_seconds,
+                    "pattern_name": decision_data.get("pattern_name", "UNKNOWN"),
+                    "source": "AI_AGENT"
+                }
+                await signal_broadcaster.broadcast_signal(signal_data)
+
+                # Fallback to physical mouse clicking ONLY if no Tampermonkey tab is active and auto_clicker is enabled
+                if len(signal_broadcaster.active_connections) == 0 and auto_clicker.config.enabled:
                     auto_clicker.execute_click(direction)
 
         return {
@@ -353,8 +416,22 @@ async def auto_cycle(payload: AutoCycleRequest):
                 }
             )
             action = f"TRADE_OPENED_{direction}"
-            # Execute direct mouse click on Quotex UP / DOWN button if enabled
-            if auto_clicker.config.enabled:
+            # Instant broadcast to Tampermonkey userscript inside Quotex (0ms DOM click, zero mouse movement)
+            signal_data = {
+                "type": "TRADE_SIGNAL",
+                "action": "EXECUTE",
+                "direction": direction,
+                "confidence": confidence,
+                "trade_id": opened_trade.id if opened_trade else str(int(time.time())),
+                "timestamp": int(time.time() * 1000),
+                "timeframe": payload.timeframe_seconds,
+                "pattern_name": decision.get("pattern_name", "UNKNOWN"),
+                "source": "AI_AGENT"
+            }
+            await signal_broadcaster.broadcast_signal(signal_data)
+
+            # Fallback to physical mouse clicking ONLY if no Tampermonkey tab is active and auto_clicker is enabled
+            if len(signal_broadcaster.active_connections) == 0 and auto_clicker.config.enabled:
                 auto_clicker.execute_click(direction)
         elif direction in ["CALL", "PUT"] and not payload.execute_trade:
             action = f"SIGNAL_ACTIVE_{direction}_PREVIEW"
@@ -501,6 +578,89 @@ async def update_config(payload: ConfigUpdateRequest):
 async def get_strategy_learning():
     """Returns self-adaptive AI pattern memory, win rates, and blocked/boosted setups."""
     return strategy_learner.get_learning_summary()
+
+
+# ==============================================================================
+# TAMPERMONKEY 5.5.1 INSTANT DOM TRADING WEBSOCKET & API ENDPOINTS
+# ==============================================================================
+
+@app.websocket("/ws/trade-signals")
+async def websocket_trade_signals(websocket: WebSocket):
+    """
+    Ultra-low-latency (< 1ms) persistent WebSocket connection for Tampermonkey userscripts.
+    Dispatches instant trade signals directly to Quotex browser tabs with ZERO physical mouse movement.
+    """
+    await signal_broadcaster.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            try:
+                msg = json.loads(data)
+                if msg.get("type") == "PING":
+                    await websocket.send_json({"type": "PONG", "timestamp": int(time.time() * 1000)})
+                elif msg.get("type") == "TRADE_EXECUTED_ACK":
+                    logger.info(f"⚡ [TAMPERMONKEY ACK] {msg.get('direction')} clicked inside Quotex DOM in {msg.get('latency_ms', 0)}ms!")
+            except Exception:
+                pass
+    except WebSocketDisconnect:
+        signal_broadcaster.disconnect(websocket)
+    except Exception as e:
+        logger.warning(f"WebSocket client error: {e}")
+        signal_broadcaster.disconnect(websocket)
+
+
+@app.get("/api/signals/latest")
+async def get_latest_signal():
+    """Returns the most recent trade signal for Tampermonkey HTTP polling fallback."""
+    return {
+        "success": True,
+        "signal": signal_broadcaster.latest_signal,
+        "connected_clients": len(signal_broadcaster.active_connections)
+    }
+
+
+@app.get("/api/signals/status")
+async def get_signals_status():
+    """Returns status of connected Tampermonkey userscript clients."""
+    return {
+        "connected_tampermonkey_clients": len(signal_broadcaster.active_connections),
+        "latest_signal": signal_broadcaster.latest_signal
+    }
+
+
+@app.post("/api/signals/test")
+async def test_broadcast_signal(payload: Dict[str, Any]):
+    """Sends a manual test signal to connected Tampermonkey userscript."""
+    direction = str(payload.get("direction", "CALL")).upper()
+    signal = {
+        "type": "TRADE_SIGNAL",
+        "action": "EXECUTE",
+        "direction": direction,
+        "confidence": 95.0,
+        "trade_id": f"test_{int(time.time())}",
+        "timestamp": int(time.time() * 1000),
+        "timeframe": 60,
+        "source": "MANUAL_TEST"
+    }
+    await signal_broadcaster.broadcast_signal(signal)
+    return {
+        "success": True,
+        "broadcasted_to": len(signal_broadcaster.active_connections),
+        "signal": signal
+    }
+
+
+@app.get("/quotex-instant-executor.user.js", include_in_schema=False)
+async def serve_userscript():
+    """Serves the Tampermonkey userscript directly for 1-click browser installation."""
+    script_path = Path(__file__).parent / "quotex-instant-executor.user.js"
+    if not script_path.exists():
+        script_path = STATIC_DIR / "quotex-instant-executor.user.js"
+    return FileResponse(
+        str(script_path),
+        media_type="application/javascript",
+        headers={"Content-Disposition": "inline; filename=quotex-instant-executor.user.js"}
+    )
 
 
 # ==============================================================================

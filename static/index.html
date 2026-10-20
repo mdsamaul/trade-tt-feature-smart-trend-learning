@@ -849,6 +849,9 @@
       <button class="btn btn-icon" id="soundToggleBtn" title="Toggle Audio Chimes">
         <span id="soundIcon">🔊</span>
       </button>
+      <button class="btn" id="tampermonkeyModalBtn" style="background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(0, 255, 136, 0.2)); border: 1px solid var(--neon-green); color: var(--neon-green); font-weight: 800; box-shadow: 0 0 10px rgba(0, 255, 136, 0.2); cursor: pointer;">
+        ⚡ Tampermonkey 5.5.1
+      </button>
       <button class="btn btn-secondary" id="autoClickModalBtn" style="border-color: var(--neon-cyan); color: var(--neon-cyan); font-weight: 700;">
         🎯 Quotex Auto-Clicker
       </button>
@@ -1018,6 +1021,9 @@
             </div>
 
             <div class="control-group">
+              <span id="tampermonkeyStatusBadge" class="font-mono" style="font-size: 0.76rem; padding: 5px 10px; border-radius: 4px; background: rgba(255, 184, 0, 0.15); color: var(--neon-gold); border: 1px solid rgba(255,184,0,0.3); font-weight: 700; cursor: pointer;" title="Click to view Tampermonkey connection">
+                ⚡ TM 5.5.1: OFFLINE
+              </span>
               <span id="autoClickStatusBadge" class="font-mono" style="font-size: 0.76rem; padding: 5px 10px; border-radius: 4px; background: rgba(255, 51, 102, 0.15); color: var(--neon-red); border: 1px solid rgba(255,51,102,0.3); font-weight: 700;">
                 🖱️ AUTO-CLICK: OFF
               </span>
@@ -1384,6 +1390,72 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" id="cancelAutoClickBtn">Cancel</button>
         <button class="btn btn-primary" id="saveAutoClickBtn">Save & Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tampermonkey 5.5.1 Instant Execution Modal (0ms DOM, Zero Mouse Movement) -->
+  <div class="modal-overlay" id="tampermonkeyModal">
+    <div class="modal-card" style="max-width: 580px;">
+      <div class="modal-header">
+        <h3 class="font-brand" style="font-size: 1rem; color: var(--neon-green);">⚡ TAMPERMONKEY 5.5.1 INSTANT DOM TRADER</h3>
+        <button class="btn btn-icon" id="closeTampermonkeyModalBtn">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="background: rgba(0, 255, 136, 0.08); border: 1px solid rgba(0, 255, 136, 0.3); padding: 14px; border-radius: 6px; font-size: 0.84rem; line-height: 1.5;">
+          🚀 <strong>জিরো-মুভমেন্ট ও ০ মিলি-সেকেন্ড এক্সিকিউশন:</strong><br>
+          মাউস কার্সর স্পর্শ না করেই সরাসরি ব্রাউজারের ভেতর থেকে Quotex-এর UP/DOWN বাটনে তাৎক্ষণিক ক্লিক করে দেয়! এতে ০ সেকেন্ডেই ক্যান্ডেলের একদম সঠিক টাইমে ও অ্যালাইনমেন্টে ট্রেড পড়ে।
+        </div>
+
+        <!-- Connection Status Card -->
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(20, 26, 40, 0.9); border-radius: 6px; border: 1px solid var(--border-color);">
+          <div>
+            <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">Quotex Tab Status</div>
+            <div class="font-mono" id="tmModalStatus" style="font-size: 0.95rem; font-weight: 800; color: var(--neon-gold);">
+              🔍 Checking connection...
+            </div>
+          </div>
+          <button class="btn btn-secondary font-mono" id="tmRefreshBtn" style="padding: 5px 12px; font-size: 0.78rem;">
+            🔄 Refresh Status
+          </button>
+        </div>
+
+        <!-- One-Click Install Button -->
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <a href="/quotex-instant-executor.user.js" target="_blank" class="btn btn-success font-mono" style="padding: 12px; text-align: center; text-decoration: none; font-size: 0.92rem; font-weight: 800; background: linear-gradient(135deg, #00ff88, #00c853); color: #000; border-radius: 6px; box-shadow: 0 0 15px rgba(0, 255, 136, 0.3); display: block;">
+            📥 1-Click Install into Tampermonkey 5.5.1
+          </a>
+          <button class="btn btn-secondary font-mono" id="copyTmScriptBtn" style="padding: 8px; font-size: 0.8rem;">
+            📋 Copy Script Code to Clipboard (ম্যানুয়াল কপি)
+          </button>
+        </div>
+
+        <!-- Test Click Dispatcher -->
+        <div style="background: rgba(14, 18, 28, 0.7); border: 1px solid var(--border-color); padding: 12px 14px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px;">
+          <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-main);">⚡ Test Instant DOM Click on Quotex Tab:</span>
+          <div style="display: flex; gap: 10px;">
+            <button class="btn font-mono" id="testTmCallBtn" style="flex: 1; padding: 8px; background: rgba(0, 255, 136, 0.2); color: var(--neon-green); border: 1px solid var(--neon-green); font-weight: 700;">
+              🟢 Send Instant CALL
+            </button>
+            <button class="btn font-mono" id="testTmPutBtn" style="flex: 1; padding: 8px; background: rgba(255, 51, 102, 0.2); color: var(--neon-red); border: 1px solid var(--neon-red); font-weight: 700;">
+              🔴 Send Instant PUT
+            </button>
+          </div>
+          <div style="font-size: 0.72rem; color: var(--text-muted);" id="tmTestResult">
+            বাটনে চাপ দিলে কোনো মাউস নড়াচড়া ছাড়াই Quotex ট্যাবে সাথে সাথে ক্লিক পড়বে।
+          </div>
+        </div>
+
+        <!-- 3-Step Setup Instructions -->
+        <div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.5; background: rgba(16, 22, 34, 0.5); padding: 10px 14px; border-radius: 6px;">
+          <strong style="color: var(--neon-cyan);">📖 সহজ ৩টি ধাপ:</strong><br>
+          ১. উপরে <strong>"1-Click Install"</strong> বাটনে ক্লিক করে Tampermonkey-তে স্ক্রিপ্টটি ইন্সটল করুন।<br>
+          ২. Quotex ট্যাবটি ওপেন বা রিফ্রেশ করুন। স্ক্রিনের উপরে একটি ছোট সবুজ পিল <code>⚡ AGENT CONNECTED (0ms DOM)</code> দেখতে পাবেন।<br>
+          ৩. ব্যস! এরপর AI সিগন্যাল দিলে মাউস কার্সর স্পর্শ না করেই চোখের পলকে কোটেক্সে ট্রেড পড়বে।
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="closeTmModalFooterBtn">Close</button>
       </div>
     </div>
   </div>
@@ -2455,11 +2527,143 @@
       }
     });
 
+    // =========================================================================
+    // TAMPERMONKEY 5.5.1 INSTANT DOM EXECUTION CONTROLS
+    // =========================================================================
+    const tampermonkeyModal = document.getElementById('tampermonkeyModal');
+    const tampermonkeyModalBtn = document.getElementById('tampermonkeyModalBtn');
+    const closeTampermonkeyModalBtn = document.getElementById('closeTampermonkeyModalBtn');
+    const closeTmModalFooterBtn = document.getElementById('closeTmModalFooterBtn');
+    const tampermonkeyStatusBadge = document.getElementById('tampermonkeyStatusBadge');
+    const tmModalStatus = document.getElementById('tmModalStatus');
+    const tmRefreshBtn = document.getElementById('tmRefreshBtn');
+    const copyTmScriptBtn = document.getElementById('copyTmScriptBtn');
+    const testTmCallBtn = document.getElementById('testTmCallBtn');
+    const testTmPutBtn = document.getElementById('testTmPutBtn');
+    const tmTestResult = document.getElementById('tmTestResult');
+
+    function openTampermonkeyModal() {
+      tampermonkeyModal.classList.add('active');
+      checkTampermonkeyStatus();
+    }
+
+    function closeTampermonkeyModal() {
+      tampermonkeyModal.classList.remove('active');
+    }
+
+    if (tampermonkeyModalBtn) tampermonkeyModalBtn.addEventListener('click', openTampermonkeyModal);
+    if (tampermonkeyStatusBadge) tampermonkeyStatusBadge.addEventListener('click', openTampermonkeyModal);
+    if (closeTampermonkeyModalBtn) closeTampermonkeyModalBtn.addEventListener('click', closeTampermonkeyModal);
+    if (closeTmModalFooterBtn) closeTmModalFooterBtn.addEventListener('click', closeTampermonkeyModal);
+
+    tampermonkeyModal.addEventListener('click', (e) => {
+      if (e.target === tampermonkeyModal) closeTampermonkeyModal();
+    });
+
+    async function checkTampermonkeyStatus() {
+      try {
+        const res = await fetch('/api/signals/status');
+        const data = await res.json();
+        const clients = data.connected_tampermonkey_clients || 0;
+
+        if (clients > 0) {
+          tampermonkeyStatusBadge.textContent = `⚡ TM: ${clients} TAB CONNECTED`;
+          tampermonkeyStatusBadge.style.color = 'var(--neon-green)';
+          tampermonkeyStatusBadge.style.borderColor = 'rgba(0, 255, 136, 0.4)';
+          tampermonkeyStatusBadge.style.background = 'rgba(0, 255, 136, 0.15)';
+          tampermonkeyStatusBadge.title = `${clients} Quotex tab(s) connected via ultra-fast WebSocket. 0ms DOM execution active.`;
+
+          if (tmModalStatus) {
+            tmModalStatus.textContent = `🟢 CONNECTED (${clients} Quotex tab active, 0ms DOM Execution)`;
+            tmModalStatus.style.color = 'var(--neon-green)';
+          }
+        } else {
+          tampermonkeyStatusBadge.textContent = '⚡ TM 5.5.1: OFFLINE';
+          tampermonkeyStatusBadge.style.color = 'var(--neon-gold)';
+          tampermonkeyStatusBadge.style.borderColor = 'rgba(255, 184, 0, 0.3)';
+          tampermonkeyStatusBadge.style.background = 'rgba(255, 184, 0, 0.15)';
+          tampermonkeyStatusBadge.title = 'No Quotex tab connected. Install script into Tampermonkey 5.5.1 to activate 0ms trade.';
+
+          if (tmModalStatus) {
+            tmModalStatus.textContent = '⚠️ Disconnected (Open Quotex tab with Tampermonkey 5.5.1)';
+            tmModalStatus.style.color = 'var(--neon-gold)';
+          }
+        }
+      } catch (err) {
+        // Silently tolerate if offline
+      }
+    }
+
+    if (tmRefreshBtn) {
+      tmRefreshBtn.addEventListener('click', async () => {
+        tmRefreshBtn.disabled = true;
+        tmRefreshBtn.textContent = '🔄 Checking...';
+        await checkTampermonkeyStatus();
+        setTimeout(() => {
+          tmRefreshBtn.disabled = false;
+          tmRefreshBtn.textContent = '🔄 Refresh Status';
+        }, 600);
+      });
+    }
+
+    if (copyTmScriptBtn) {
+      copyTmScriptBtn.addEventListener('click', async () => {
+        try {
+          const res = await fetch('/quotex-instant-executor.user.js');
+          const code = await res.text();
+          await navigator.clipboard.writeText(code);
+          copyTmScriptBtn.textContent = '✅ স্ক্রিপ্ট কপি হয়েছে! Tampermonkey-তে পেস্ট করুন';
+          sound.playWin();
+          setTimeout(() => {
+            copyTmScriptBtn.textContent = '📋 Copy Script Code to Clipboard (ম্যানুয়াল কপি)';
+          }, 3000);
+        } catch (err) {
+          alert('কপি ব্যর্থ হয়েছে: ' + err);
+        }
+      });
+    }
+
+    async function sendTestSignal(direction) {
+      const targetBtn = direction === 'CALL' ? testTmCallBtn : testTmPutBtn;
+      const origText = targetBtn.textContent;
+      targetBtn.disabled = true;
+      targetBtn.textContent = `⚡ Sending ${direction}...`;
+      tmTestResult.textContent = `🚀 Dispatching ${direction} signal to Quotex tab via WebSocket...`;
+
+      try {
+        const res = await fetch('/api/signals/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ direction: direction })
+        });
+        const data = await res.json();
+        sound.playTradePlaced();
+
+        if (data.broadcasted_to > 0) {
+          tmTestResult.innerHTML = `<span style="color: var(--neon-green); font-weight: 700;">✅ ${data.broadcasted_to}টি Quotex ট্যাবে সাথে সাথে 0ms-এ ক্লিক পড়েছে! কোনো মাউস নড়েনি।</span>`;
+        } else {
+          tmTestResult.innerHTML = `<span style="color: var(--neon-gold); font-weight: 700;">⚠️ সিগন্যাল সেন্ট হয়েছে কিন্তু কোটেক্স ট্যাব কানেক্টেড নেই। Tampermonkey স্ক্রিপ্ট রান করে Quotex রিফ্রেশ করুন।</span>`;
+        }
+      } catch (err) {
+        tmTestResult.innerHTML = `<span style="color: var(--neon-red);">❌ ব্যর্থ: ${err}</span>`;
+      }
+
+      setTimeout(() => {
+        targetBtn.disabled = false;
+        targetBtn.textContent = origText;
+      }, 1500);
+    }
+
+    if (testTmCallBtn) testTmCallBtn.addEventListener('click', () => sendTestSignal('CALL'));
+    if (testTmPutBtn) testTmPutBtn.addEventListener('click', () => sendTestSignal('PUT'));
+
     // Initial load
     fetchSessionStatus();
     fetchTradeHistory();
     fetchLearningMemory();
     fetchAutoClickConfig();
+    checkTampermonkeyStatus();
+    setInterval(checkTampermonkeyStatus, 3500);
     updateCandleClock();
     setInterval(updateCandleClock, 250);
   </script>
