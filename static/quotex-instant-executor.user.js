@@ -254,6 +254,95 @@
   }
 
   // =========================================================================
+  // QUOTEX ACCOUNT DETECTOR & AUTO-CONFIRMATION HANDLER (REAL LIVE SUPPORT)
+  // =========================================================================
+  function getQuotexAccountInfo() {
+    let type = 'UNKNOWN';
+    let balance = '';
+    const selectors = [
+      '.usermenu__info-wrapper',
+      '.header__account',
+      '.usermenu__info',
+      '.account-balance',
+      '.usermenu',
+      '[data-qa="account-type"]',
+      '.balance-wrap'
+    ];
+    for (const sel of selectors) {
+      try {
+        const el = document.querySelector(sel);
+        if (el && isElementVisible(el)) {
+          const txt = el.innerText || el.textContent || '';
+          const lower = txt.toLowerCase();
+          if (lower.includes('demo') || lower.includes('демо')) {
+            type = 'DEMO';
+          } else if (lower.includes('live') || lower.includes('real') || lower.includes('стандарт') || lower.includes('реальн')) {
+            type = 'REAL';
+          }
+          const match = txt.match(/[\$€£₹৳]?\s*[\d,]+(\.\d{2})?/);
+          if (match) balance = match[0].trim();
+          if (type !== 'UNKNOWN') break;
+        }
+      } catch (e) {}
+    }
+    return { type, balance };
+  }
+
+  function switchQuotexAccount(targetType) {
+    const menuBtn = document.querySelector('.usermenu__info-wrapper, .usermenu, .header__account, .usermenu__info');
+    if (menuBtn) {
+      menuBtn.click();
+      setTimeout(() => {
+        const items = document.querySelectorAll('.usermenu__dropdown-item, .usermenu__item, div[class*="account-item"], [role="menuitem"], .dropdown-item');
+        for (const item of items) {
+          const t = (item.innerText || item.textContent || '').toLowerCase();
+          if (targetType === 'REAL' && (t.includes('live') || t.includes('real') || t.includes('стандарт') || t.includes('реальн'))) {
+            item.click();
+            showHudNotification('💎 Switched to Quotex REAL Account', '#ffb800');
+            return;
+          } else if (targetType === 'DEMO' && (t.includes('demo') || t.includes('демо'))) {
+            item.click();
+            showHudNotification('🧪 Switched to Quotex DEMO Account', '#00f0ff');
+            return;
+          }
+        }
+      }, 150);
+    } else {
+      showHudNotification('Please click account menu in top right to switch', '#ffb800');
+    }
+  }
+
+  function autoConfirmTradeModal() {
+    const confirmSelectors = [
+      'button[data-qa*="confirm"]',
+      '.modal__button',
+      '.modal button.btn-primary',
+      '.modal-deal-confirm button',
+      '.popup-confirm__button',
+      'div[role="dialog"] button.btn-primary',
+      'div[role="dialog"] button:not(.close):not([class*="cancel"])',
+      '.modal button',
+      '.deal-confirmation-modal button'
+    ];
+    for (const sel of confirmSelectors) {
+      try {
+        const btns = document.querySelectorAll(sel);
+        for (const btn of btns) {
+          if (btn && isElementVisible(btn)) {
+            const txt = (btn.innerText || btn.textContent || '').trim().toLowerCase();
+            if (txt.includes('confirm') || txt.includes('yes') || txt.includes('подтвердить') || txt.includes('ok') || txt.includes('open') || txt.includes('deal')) {
+              btn.click();
+              console.log("⚡ [Quotex Instant Trader] Auto-confirmed Quotex trade confirmation modal!");
+              return true;
+            }
+          }
+        }
+      } catch (e) {}
+    }
+    return false;
+  }
+
+  // =========================================================================
   // ZERO-MOVEMENT INSTANT DISPATCHER (0ms DOM CLICK)
   // =========================================================================
   function executeInstantDOMClick(direction, signal) {
@@ -265,6 +354,16 @@
       console.error(`❌ [Quotex Instant Trader] Could not locate ${direction} button in Quotex DOM!`);
       showHudNotification(`❌ ${direction} Button Not Found! Click [🎯 Calibrate]`, '#ff3366');
       showSignalPercentagePopup(signal || { direction, confidence: 90.0 }, '❌ BUTTON NOT FOUND (Click Calibrate)');
+      return false;
+    }
+
+    // Check if button is disabled in Quotex (e.g. low real balance, min investment $1 requirement)
+    const isDisabled = targetBtn.disabled || targetBtn.getAttribute('aria-disabled') === 'true' || targetBtn.classList.contains('disabled');
+    if (isDisabled) {
+      const acct = getQuotexAccountInfo();
+      console.error(`❌ [Quotex Instant Trader] ${direction} button is DISABLED in Quotex DOM! Account: ${acct.type}`);
+      showHudNotification(`❌ Button DISABLED! (${acct.type}) Check balance or min $1`, '#ff3366');
+      showSignalPercentagePopup(signal || { direction, confidence: 90.0 }, `❌ BUTTON DISABLED (${acct.type}: Check Balance or Min $1)`);
       return false;
     }
 
@@ -306,6 +405,12 @@
         targetBtn.firstElementChild.dispatchEvent(new MouseEvent('click', eventInit));
       } catch (e) {}
     }
+
+    // Immediately handle any Quotex Real Account confirmation popups (0ms auto-confirm)
+    setTimeout(autoConfirmTradeModal, 40);
+    setTimeout(autoConfirmTradeModal, 120);
+    setTimeout(autoConfirmTradeModal, 250);
+    setTimeout(autoConfirmTradeModal, 450);
 
     const elapsed = (performance.now() - startTime).toFixed(2);
     playClickChime(direction);
@@ -425,6 +530,10 @@
             <strong style="color: ${mainColor};">0ms DOM (Zero Mouse Movement)</strong>
           </div>
           <div style="display: flex; justify-content: space-between;">
+            <span style="color: #718096;">Account Target:</span>
+            <strong id="popup-account-type" style="color: #00f0ff;">DETECTING...</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
             <span style="color: #718096;">Trade Status:</span>
             <strong style="color: #00f0ff;">${statusMessage || '⚡ Instant Executed'}</strong>
           </div>
@@ -443,6 +552,20 @@
     setTimeout(() => {
       const bar = document.getElementById('popup-progress-bar');
       if (bar) bar.style.width = '0%';
+      const acct = getQuotexAccountInfo();
+      const popupAcct = document.getElementById('popup-account-type');
+      if (popupAcct) {
+        if (acct.type === 'REAL') {
+          popupAcct.textContent = `💎 REAL LIVE (${acct.balance || 'Active'})`;
+          popupAcct.style.color = '#ffb800';
+        } else if (acct.type === 'DEMO') {
+          popupAcct.textContent = `🧪 DEMO TEST (${acct.balance || 'Test'})`;
+          popupAcct.style.color = '#00f0ff';
+        } else {
+          popupAcct.textContent = signal.execution_mode === 'REAL_LIVE' ? '💎 REAL LIVE' : '🧪 DEMO TEST';
+          popupAcct.style.color = signal.execution_mode === 'REAL_LIVE' ? '#ffb800' : '#00f0ff';
+        }
+      }
     }, 50);
 
     const closeBtn = document.getElementById('close-signal-popup');
@@ -639,6 +762,25 @@
           cursor: pointer;
         " title="Click here to calibrate buttons if Quotex updates its layout">🎯 Calibrate</button>
 
+        <span style="color: rgba(255,255,255,0.2);">|</span>
+
+        <span id="hud-account-badge" style="
+          font-weight: 800; color: #00f0ff; background: rgba(0,240,255,0.15);
+          border: 1px solid rgba(0,240,255,0.3); border-radius: 6px;
+          padding: 2px 6px; font-size: 9.5px; cursor: pointer;
+        " title="Current Quotex Account Type">ACCT: DETECTING...</span>
+
+        <button id="hud-switch-acct-btn" style="
+          background: rgba(255, 184, 0, 0.15);
+          color: #ffb800;
+          border: 1px solid rgba(255, 184, 0, 0.4);
+          border-radius: 4px;
+          padding: 2px 6px;
+          font-size: 9.5px;
+          font-weight: 700;
+          cursor: pointer;
+        " title="1-Click Switch between Demo and Real account in Quotex">🔄 Switch</button>
+
         <span id="hud-notif" style="display: none; font-weight: bold; margin-left: 4px;"></span>
       </div>
     `;
@@ -664,6 +806,32 @@
 
     // Interactive Button Calibrator (Click Calibrate -> click UP button -> click DOWN button)
     document.getElementById('hud-calibrate-btn').addEventListener('click', startInteractiveCalibration);
+
+    // 1-Click Switch Quotex Account Button
+    document.getElementById('hud-switch-acct-btn').addEventListener('click', () => {
+      const cur = getQuotexAccountInfo();
+      const target = cur.type === 'REAL' ? 'DEMO' : 'REAL';
+      switchQuotexAccount(target);
+    });
+
+    // Periodic Live Account Monitor (Updates badge every 1.2s)
+    setInterval(() => {
+      const acct = getQuotexAccountInfo();
+      const badge = document.getElementById('hud-account-badge');
+      if (badge) {
+        if (acct.type === 'REAL') {
+          badge.textContent = `💎 REAL (${acct.balance || 'Active'})`;
+          badge.style.color = '#ffb800';
+          badge.style.borderColor = 'rgba(255, 184, 0, 0.4)';
+          badge.style.background = 'rgba(255, 184, 0, 0.2)';
+        } else if (acct.type === 'DEMO') {
+          badge.textContent = `🧪 DEMO (${acct.balance || 'Test'})`;
+          badge.style.color = '#00f0ff';
+          badge.style.borderColor = 'rgba(0, 240, 255, 0.4)';
+          badge.style.background = 'rgba(0, 240, 255, 0.15)';
+        }
+      }
+    }, 1200);
   }
 
   function startInteractiveCalibration() {

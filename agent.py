@@ -130,6 +130,12 @@ class SessionStats(BaseModel):
     active_trade: Optional[TradeRecord] = None
     learned_patterns_count: int = 0
     learning_summary: Optional[Dict[str, Any]] = None
+    execution_mode: str = "DEMO_VALIDATION"
+    demo_passed: bool = False
+    demo_trades: int = 0
+    demo_wins: int = 0
+    demo_win_rate: float = 0.0
+    auto_switch_to_real: bool = True
 
 
 # ==============================================================================
@@ -1927,6 +1933,17 @@ class TradingSessionManager:
         self.trade_history: List[TradeRecord] = []
         self.loss_cooldown_until: float = 0.0
 
+        # Execution Mode: DEMO_VALIDATION vs REAL_LIVE
+        self.execution_mode: str = os.getenv("EXECUTION_MODE", "DEMO_VALIDATION")
+        self.auto_switch_to_real: bool = os.getenv("AUTO_SWITCH_TO_REAL", "true").lower() == "true"
+        self.demo_trades: int = 0
+        self.demo_wins: int = 0
+        self.demo_losses: int = 0
+        self.demo_passed: bool = False
+        self.real_trades: int = 0
+        self.real_wins: int = 0
+        self.real_losses: int = 0
+
     def get_stats(self) -> SessionStats:
         with self.lock:
             total = self.wins + self.losses + self.draws
@@ -1953,6 +1970,7 @@ class TradingSessionManager:
                     status_message = f"Optimizing strategy ({rolling_wins}/{self.rolling_window_size} Wins = {rolling_wr:.0f}%). Target: >= 80%."
 
             learning_data = strategy_learner.get_learning_summary()
+            demo_wr = (self.demo_wins / self.demo_trades * 100.0) if self.demo_trades > 0 else 0.0
             return SessionStats(
                 balance=round(self.balance, 2),
                 initial_balance=round(self.initial_balance, 2),
@@ -1970,7 +1988,13 @@ class TradingSessionManager:
                 strictness_name=f"Level {self.current_strictness} - {strict_cfg.name}",
                 active_trade=self.active_trade,
                 learned_patterns_count=learning_data.get("total_learned_patterns", 0),
-                learning_summary=learning_data
+                learning_summary=learning_data,
+                execution_mode=self.execution_mode,
+                demo_passed=self.demo_passed,
+                demo_trades=self.demo_trades,
+                demo_wins=self.demo_wins,
+                demo_win_rate=round(demo_wr, 1),
+                auto_switch_to_real=self.auto_switch_to_real
             )
 
     def open_trade(
@@ -2087,6 +2111,30 @@ class TradingSessionManager:
 
             self.total_trades += 1
             trade.balance_after = self.balance
+
+            # Track Demo Validation vs Real Live performance
+            if self.execution_mode == "DEMO_VALIDATION":
+                self.demo_trades += 1
+                if outcome == "WIN":
+                    self.demo_wins += 1
+                elif outcome == "LOSS":
+                    self.demo_losses += 1
+                demo_wr = (self.demo_wins / self.demo_trades * 100.0) if self.demo_trades > 0 else 0.0
+                
+                # Validation passed if at least 3 trades and >= 75% WR (e.g. 3/3, 3/4, 4/5)
+                if (self.demo_trades >= 3 and demo_wr >= 75.0) or self.target_achieved:
+                    if not self.demo_passed:
+                        logger.info(f"🎉 [DEMO VALIDATION PASSED]: Demo test converged at {self.demo_wins}/{self.demo_trades} ({demo_wr:.0f}% Win Rate).")
+                    self.demo_passed = True
+                    if self.auto_switch_to_real and self.execution_mode == "DEMO_VALIDATION":
+                        self.execution_mode = "REAL_LIVE"
+                        logger.info("💎 [AUTO-PROMOTION TO REAL]: Demo passed! Automatically activated REAL LIVE account execution.")
+            else:
+                self.real_trades += 1
+                if outcome == "WIN":
+                    self.real_wins += 1
+                elif outcome == "LOSS":
+                    self.real_losses += 1
 
             # Deep Post-Mortem Root Cause Analysis & Learning Feedback
             try:
@@ -2335,7 +2383,10 @@ def force_focus_quotex_window(target_x: Optional[int] = None, target_y: Optional
                     if user32.GetWindowTextW(hwnd, buf, 512) > 0:
                         t = buf.value.lower()
                         # Match Quotex demo or trading, ignore our own agent dashboard title
-                        if "quotex" in t and "autonomous paper-trading" not in t:
+                        quotex_keywords = ["quotex", "qx broker", "qxbroker", "market-qx", "qx-broker", "web trading"]
+                        is_quotex = any(k in t for k in quotex_keywords)
+                        is_excluded = any(ex in t for ex in ["autonomous paper-trading", "antigravity"])
+                        if is_quotex and not is_excluded:
                             candidates.append(hwnd)
                 return True
 

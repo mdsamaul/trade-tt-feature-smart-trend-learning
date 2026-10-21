@@ -145,6 +145,11 @@ class TradeOverrideRequest(BaseModel):
     outcome: str = Field(..., description="Target outcome: 'LOSS' or 'WIN'")
 
 
+class ExecutionModeRequest(BaseModel):
+    execution_mode: Optional[str] = Field(default=None, description="'DEMO_VALIDATION' or 'REAL_LIVE'")
+    auto_switch_to_real: Optional[bool] = Field(default=None, description="Auto-switch to Real when Demo passes")
+
+
 
 # ==============================================================================
 # ROUTES
@@ -195,6 +200,42 @@ async def override_trade_outcome(payload: TradeOverrideRequest):
     except Exception as e:
         logger.exception("Error during trade outcome override")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/execution-mode")
+async def get_execution_mode():
+    """Returns current execution mode (DEMO_VALIDATION vs REAL_LIVE) and validation progress."""
+    stats = trading_session.get_stats()
+    return {
+        "success": True,
+        "execution_mode": stats.execution_mode,
+        "demo_passed": stats.demo_passed,
+        "demo_trades": stats.demo_trades,
+        "demo_wins": stats.demo_wins,
+        "demo_win_rate": stats.demo_win_rate,
+        "auto_switch_to_real": stats.auto_switch_to_real
+    }
+
+
+@app.post("/api/execution-mode")
+async def set_execution_mode(payload: ExecutionModeRequest):
+    """Sets execution mode to DEMO_VALIDATION or REAL_LIVE and updates auto-switch preference."""
+    with trading_session.lock:
+        if payload.execution_mode in ["DEMO_VALIDATION", "REAL_LIVE"]:
+            trading_session.execution_mode = payload.execution_mode
+        if payload.auto_switch_to_real is not None:
+            trading_session.auto_switch_to_real = payload.auto_switch_to_real
+    stats = trading_session.get_stats()
+    logger.info(f"Execution mode updated: mode={stats.execution_mode}, auto_switch={stats.auto_switch_to_real}")
+    return {
+        "success": True,
+        "execution_mode": stats.execution_mode,
+        "demo_passed": stats.demo_passed,
+        "demo_trades": stats.demo_trades,
+        "demo_wins": stats.demo_wins,
+        "demo_win_rate": stats.demo_win_rate,
+        "auto_switch_to_real": stats.auto_switch_to_real
+    }
 
 
 
@@ -273,6 +314,8 @@ async def analyze_and_trade(payload: AnalyzeRequest):
                     "timeframe": payload.timeframe_seconds,
                     "pattern_name": decision_data.get("pattern_name", "UNKNOWN"),
                     "candle_color": decision_data.get("candle_color", "GREEN" if direction == "CALL" else "RED"),
+                    "execution_mode": trading_session.execution_mode,
+                    "demo_passed": trading_session.demo_passed,
                     "source": "AI_AGENT"
                 }
                 await signal_broadcaster.broadcast_signal(signal_data)
@@ -444,6 +487,8 @@ async def auto_cycle(payload: AutoCycleRequest):
                     "timeframe": payload.timeframe_seconds,
                     "pattern_name": decision.get("pattern_name", "UNKNOWN"),
                     "candle_color": decision.get("candle_color", "GREEN" if direction == "CALL" else "RED"),
+                    "execution_mode": trading_session.execution_mode,
+                    "demo_passed": trading_session.demo_passed,
                     "source": "AI_AGENT"
                 }
                 await signal_broadcaster.broadcast_signal(signal_data)
