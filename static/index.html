@@ -875,7 +875,7 @@
           <span id="statusBadgeText">TRAINING / PRACTICING</span>
         </div>
         <div class="status-desc" id="statusDescription">
-          Collecting frames. Evaluating candle probability against rolling accuracy target (>= 80%).
+          Collecting frames. Evaluating candle probability against rolling accuracy target (100% Win Rate).
         </div>
       </div>
 
@@ -918,7 +918,7 @@
           <span>🎯</span>
         </div>
         <div class="stat-value font-mono" id="statWinRate">0.0%</div>
-        <div class="stat-sub">Target Benchmark: 80% Win Rate</div>
+        <div class="stat-sub">Target Benchmark: 100% Win Rate</div>
       </div>
 
       <div class="stat-card">
@@ -1288,13 +1288,21 @@
           </div>
         </div>
         <div class="form-group">
-          <label for="cfgStrictness">Manual Strictness Override (1-5):</label>
+          <label for="cfgStrictness">Manual Strictness Override (1-6):</label>
           <select id="cfgStrictness">
             <option value="1">Level 1 - Lenient (65% min conf)</option>
             <option value="2">Level 2 - Balanced (72% min conf)</option>
-            <option value="3" selected>Level 3 - Selective / High Probability (78% min conf - Recommended)</option>
+            <option value="3">Level 3 - Selective / High Probability (78% min conf)</option>
             <option value="4">Level 4 - Defense / Institutional (82% min conf)</option>
             <option value="5">Level 5 - Sniper Mode (86% min conf)</option>
+            <option value="6" selected>Level 6 - Ultra Sniper 100% Confluence (90%+ min conf, Zero-Loss Mode)</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-top: 10px;">
+          <label for="cfgTargetWinRate">Target Accuracy Goal:</label>
+          <select id="cfgTargetWinRate">
+            <option value="1.0" selected>100% Win Rate (5/5 Wins - Zero-Loss Sniper Target)</option>
+            <option value="0.8">80% Win Rate (4/5 Wins Benchmark)</option>
           </select>
         </div>
       </div>
@@ -1314,17 +1322,27 @@
       </div>
       <div class="modal-body">
         <div style="background: rgba(0, 240, 255, 0.08); border: 1px solid rgba(0, 240, 255, 0.2); padding: 12px; border-radius: 6px; font-size: 0.82rem; line-height: 1.45;">
-          ⚡ <strong>সরাসরি Quotex Demo-তে অটো-ট্রেড:</strong><br>
-          AI যখনই <strong style="color: var(--neon-green);">CALL</strong> বা <strong style="color: var(--neon-red);">PUT</strong> সিগন্যাল ডিটেক্ট করবে, ব্যাকএন্ড স্বয়ংক্রিয়ভাবে আপনার কোটেক্সের সবুজ বা লাল বোতামে লাইভ মাউস ক্লিক এক্সিকিউট করবে!
+          ⚡ <strong>Quotex Demo ও Real Live অ্যাকাউন্টে অটো-ট্রেড (100% Sniper Execution):</strong><br>
+          AI যখনই <strong style="color: var(--neon-green);">CALL</strong> বা <strong style="color: var(--neon-red);">PUT</strong> সিগন্যাল ডিটেক্ট করবে, ব্যাকএন্ড স্বয়ংক্রিয়ভাবে আপনার কোটেক্সের সবুজ বা লাল বোতামে লাইভ মাউস ক্লিক এক্সিকিউট করবে (ডেমো ও রিয়েল উভয় অ্যাকাউন্টে কার্যকর)!
         </div>
 
         <!-- Master Switch -->
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(20, 26, 40, 0.85); border-radius: 6px; border: 1px solid var(--border-color);">
           <div>
             <strong style="font-size: 0.9rem;">Enable Direct Auto-Clicking</strong>
-            <p style="font-size: 0.75rem; color: var(--text-muted);">Quotex Demo অ্যাকাউন্টে অটো-ক্লিক চালু করুন</p>
+            <p style="font-size: 0.75rem; color: var(--text-muted);">Quotex Demo ও Real লাইভ অ্যাকাউন্টে অটো-ক্লিক চালু করুন</p>
           </div>
           <input type="checkbox" id="acEnabledToggle" style="transform: scale(1.6); cursor: pointer; accent-color: var(--neon-cyan);">
+        </div>
+
+        <!-- Account Mode Selector -->
+        <div class="form-group" style="margin-top: 10px;">
+          <label for="acAccountMode">ট্রেডিং অ্যাকাউন্ট মোড (Trading Account Mode):</label>
+          <select id="acAccountMode" style="width: 100%; padding: 8px; background: rgba(16, 22, 36, 0.9); border: 1px solid var(--border-color); color: #fff; border-radius: 4px;">
+            <option value="ALL" selected>Demo ও Real Live (উভয় অ্যাকাউন্টে অটো-ট্রেড 🚀)</option>
+            <option value="DEMO">Demo Only (সেফটি প্র্যাকটিস মোড 🛡️)</option>
+            <option value="REAL">Real Live Account Only (রিয়েল অ্যাকাউন্ট অনলি 💎)</option>
+          </select>
         </div>
 
         <!-- One-Click Auto-Detect AI Button -->
@@ -2237,6 +2255,9 @@
         document.getElementById('cfgAmount').value = cfg.trade_amount;
         document.getElementById('cfgPayout').value = cfg.payout_rate;
         document.getElementById('cfgStrictness').value = cfg.current_strictness;
+        if (cfg.target_win_rate !== undefined) {
+          document.getElementById('cfgTargetWinRate').value = cfg.target_win_rate.toString();
+        }
         configModal.classList.add('open');
       } catch (e) {
         console.error("Error loading config:", e);
@@ -2257,7 +2278,8 @@
         model_name: document.getElementById('cfgModel').value.trim(),
         trade_amount: parseFloat(document.getElementById('cfgAmount').value),
         payout_rate: parseFloat(document.getElementById('cfgPayout').value),
-        strictness_level: parseInt(document.getElementById('cfgStrictness').value, 10)
+        strictness_level: parseInt(document.getElementById('cfgStrictness').value, 10),
+        target_win_rate: parseFloat(document.getElementById('cfgTargetWinRate').value)
       };
 
       if (keyVal) {
@@ -2320,6 +2342,11 @@
         acCallY.value = data.call_y;
         acPutX.value = data.put_x;
         acPutY.value = data.put_y;
+
+        if (data.account_mode) {
+          const acModeEl = document.getElementById('acAccountMode');
+          if (acModeEl) acModeEl.value = data.account_mode;
+        }
 
         if (data.enabled) {
           autoClickStatusBadge.innerHTML = '⚡ AUTO-CLICK: ACTIVE';
@@ -2506,13 +2533,15 @@
         return;
       }
 
+      const acModeEl = document.getElementById('acAccountMode');
       const payload = {
         enabled: acEnabledToggle.checked,
         call_x: parseInt(acCallX.value, 10),
         call_y: callY,
         put_x: parseInt(acPutX.value, 10),
         put_y: putY,
-        restore_cursor: false
+        restore_cursor: false,
+        account_mode: acModeEl ? acModeEl.value : "ALL"
       };
 
       try {

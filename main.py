@@ -136,8 +136,10 @@ class ConfigUpdateRequest(BaseModel):
     model_name: Optional[str] = None
     trade_amount: Optional[float] = Field(default=None, ge=1.0)
     payout_rate: Optional[float] = Field(default=None, ge=0.1, le=1.0)
-    strictness_level: Optional[int] = Field(default=None, ge=1, le=5)
+    strictness_level: Optional[int] = Field(default=None, ge=1, le=6)
     auto_optimize: Optional[bool] = None
+    target_win_rate: Optional[float] = Field(default=None, ge=0.5, le=1.0)
+    account_mode: Optional[str] = Field(default=None, pattern="^(ALL|DEMO|REAL)$")
 
 
 class TradeOverrideRequest(BaseModel):
@@ -273,7 +275,9 @@ async def analyze_and_trade(payload: AnalyzeRequest):
                     "timeframe": payload.timeframe_seconds,
                     "pattern_name": decision_data.get("pattern_name", "UNKNOWN"),
                     "candle_color": decision_data.get("candle_color", "GREEN" if direction == "CALL" else "RED"),
-                    "source": "AI_AGENT"
+                    "source": "AI_AGENT",
+                    "target_accuracy": "100%",
+                    "account_mode": getattr(auto_clicker.config, "account_mode", "ALL")
                 }
                 await signal_broadcaster.broadcast_signal(signal_data)
 
@@ -444,7 +448,9 @@ async def auto_cycle(payload: AutoCycleRequest):
                     "timeframe": payload.timeframe_seconds,
                     "pattern_name": decision.get("pattern_name", "UNKNOWN"),
                     "candle_color": decision.get("candle_color", "GREEN" if direction == "CALL" else "RED"),
-                    "source": "AI_AGENT"
+                    "source": "AI_AGENT",
+                    "target_accuracy": "100%",
+                    "account_mode": getattr(auto_clicker.config, "account_mode", "ALL")
                 }
                 await signal_broadcaster.broadcast_signal(signal_data)
 
@@ -484,6 +490,7 @@ class AutoClickUpdateRequest(BaseModel):
     put_x: Optional[int] = None
     put_y: Optional[int] = None
     restore_cursor: Optional[bool] = None
+    account_mode: Optional[str] = None
 
 
 class TestClickRequest(BaseModel):
@@ -518,7 +525,8 @@ async def update_autoclick_config(payload: AutoClickUpdateRequest):
         call_y=payload.call_y,
         put_x=payload.put_x,
         put_y=payload.put_y,
-        restore_cursor=payload.restore_cursor
+        restore_cursor=payload.restore_cursor,
+        account_mode=payload.account_mode
     )
     return {"success": True, "config": auto_clicker.config.model_dump()}
 
@@ -565,6 +573,8 @@ async def get_config():
         "payout_rate": trading_session.payout_rate,
         "current_strictness": trading_session.current_strictness,
         "auto_optimize": trading_session.auto_optimize,
+        "target_win_rate": trading_session.target_win_rate,
+        "account_mode": auto_clicker.config.account_mode,
         "strictness_tiers": {k: v.model_dump() for k, v in STRICTNESS_TIERS.items()}
     }
 
@@ -588,6 +598,11 @@ async def update_config(payload: ConfigUpdateRequest):
             trading_session.current_strictness = payload.strictness_level
         if payload.auto_optimize is not None:
             trading_session.auto_optimize = payload.auto_optimize
+        if payload.target_win_rate is not None:
+            trading_session.target_win_rate = payload.target_win_rate
+
+    if payload.account_mode is not None:
+        auto_clicker.update_config(account_mode=payload.account_mode)
 
     return {"success": True, "message": "Configuration updated successfully."}
 

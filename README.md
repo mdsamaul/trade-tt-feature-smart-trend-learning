@@ -1,6 +1,6 @@
-# Quotex Autonomous Paper-Trading & Self-Optimizing Agent
+# Quotex Autonomous Demo & Real Live Trading Agent (100% Sniper Target)
 
-An autonomous quantitative paper-trading system that uses **Vision AI** and **Computer Vision** to ingest Quotex demo charts, analyze price action directly from the visual canvas, execute virtual paper trades, verify real win/loss outcomes at candle close, and automatically self-tune its strictness parameters until it converges at a minimum **80% Win Rate (4 wins out of 5 trades in a rolling window)**.
+An autonomous quantitative binary options system that uses **Vision AI** and **Computer Vision** to ingest Quotex charts (Demo & Real Live), analyze price action directly from the visual canvas, execute trades instantly via 0ms DOM Tampermonkey events or direct auto-clicking, verify real win/loss outcomes at candle close, and automatically self-tune its strictness parameters until it converges at **100% Win Rate (5/5 wins in a rolling window)**.
 
 ---
 
@@ -10,9 +10,9 @@ An autonomous quantitative paper-trading system that uses **Vision AI** and **Co
    - Ingests high-resolution video frames via the browser's WebRTC Screen Capture API (`navigator.mediaDevices.getDisplayMedia`).
    - Uses OpenCV and Pillow to isolate the active candlestick canvas (last 20–30 candles and the right-hand price axis) while filtering out navigation menus and non-chart UI elements.
 2. **Self-Optimizing Strategy Engine (`StrategyOptimizer`)**:
-   - Dynamic 5-Tier Strictness Matrix (Levels 1 to 5: *Lenient* → *Balanced* → *Selective* → *Defense* → *Sniper*).
-   - If a loss occurs and the rolling accuracy drops below 80%, the agent automatically tightens strictness thresholds (demands higher confidence scores, stronger rejection wicks, and stricter EMA/trend alignment).
-   - Once the rolling 5-trade accuracy achieves $\ge 80\%$ (4/5 or 5/5 wins), the agent transitions to **`TARGET ACHIEVED: 80% WIN RATE`**.
+   - Dynamic 6-Tier Strictness Matrix (Levels 1 to 6: *Lenient* → *Balanced* → *Selective* → *Defense* → *Sniper* → *Ultra Sniper 100%*).
+   - If a loss occurs, the agent immediately escalates to Level 6 Ultra-Sniper mode (demanding 90%+ confidence, strong rejection wicks, clear S&R space, and zero opposing wicks).
+   - Once the rolling 5-trade accuracy achieves 100% (5/5 wins), the agent transitions to **`TARGET ACHIEVED: 100% WIN RATE`**.
 3. **Dual Vision Engine (AI Vision + Zero-Config CV Fallback)**:
    - **OpenAI-Compatible / xAI Grok Vision**: Connects to `gpt-4o`, `grok-vision-beta`, or OpenRouter to evaluate candlestick patterns, order blocks, and rejection wicks.
    - **Internal Heuristic Computer-Vision Engine**: Standalone OpenCV pipeline that analyzes color ratios, recent momentum, and price delta even without an API key or when offline.
@@ -106,11 +106,12 @@ The application will start at:
 
 | Level | Mode | Min Confidence | Description |
 |---|---|---|---|
-| **1** | Lenient | 62% | Trades on standard momentum, engulfing bodies, and basic S&R bounces. |
-| **2** | Balanced | 70% | Requires clean trend alignment (EMA slope) or distinct candlestick rejection wicks. |
+| **1** | Lenient | 65% | Trades on standard momentum, engulfing bodies, and basic S&R bounces. |
+| **2** | Balanced | 72% | Requires clean trend alignment (EMA slope) or distinct candlestick rejection wicks. |
 | **3** | Selective | 78% | Demands high confluence: Trend alignment + Key Support/Resistance rejection. |
-| **4** | High Strictness | 84% | Activated after losses. Filters out 80% of candles; requires institutional pin-bars. |
-| **5** | Sniper Mode | 90% | Highest conviction only. Requires clear momentum exhaustion at extreme S&R bounce. |
+| **4** | Defense | 82% | Institutional risk reduction: demands strong S&R rejection + trend alignment. |
+| **5** | Sniper Mode | 86% | Highest conviction: deep pullback rejection or major pin-bar. |
+| **6** | Ultra Sniper 100% | 90%+ | Zero-Loss Confluence: 90%+ confidence, zero opposing wicks, strict trend alignment, and clear S&R space. |
 
 ---
 

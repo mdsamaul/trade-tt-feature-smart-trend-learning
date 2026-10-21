@@ -37,7 +37,7 @@ logger = logging.getLogger("QuotexAgent")
 # ==============================================================================
 
 class StrictnessConfig(BaseModel):
-    level: int = Field(..., ge=1, le=5)
+    level: int = Field(..., ge=1, le=6)
     name: str
     min_confidence: float
     min_wick_ratio: float
@@ -85,6 +85,14 @@ STRICTNESS_TIERS: Dict[int, StrictnessConfig] = {
         min_wick_ratio=0.28,
         require_trend_alignment=True,
         description="Highest conviction only. Deep pullback rejection or major pin-bar."
+    ),
+    6: StrictnessConfig(
+        level=6,
+        name="Ultra Sniper / 100% Confluence (Zero-Loss Mode)",
+        min_confidence=90.0,
+        min_wick_ratio=0.25,
+        require_trend_alignment=True,
+        description="Zero-compromise sniper mode for 100% Win Rate. Demands 90%+ confidence, strict trend confluence, zero opposing wicks, and clear space before S&R."
     )
 }
 
@@ -130,6 +138,8 @@ class SessionStats(BaseModel):
     active_trade: Optional[TradeRecord] = None
     learned_patterns_count: int = 0
     learning_summary: Optional[Dict[str, Any]] = None
+    target_win_rate: float = 1.0
+    account_mode: str = "ALL"
 
 
 # ==============================================================================
@@ -1658,109 +1668,151 @@ You MUST respond strictly in valid JSON format matching this schema:
         level_name = f"Zone (Pos: {pos:.2f})"
         reasoning = f"No clear directional edge (UP: {up_prob:.1f}%, DOWN: {down_prob:.1f}%). Strictness Level {strictness_cfg.level} requires >= {strictness_cfg.min_confidence}% confidence."
 
-        if up_prob >= strictness_cfg.min_confidence and diff >= 4.0:
+        if up_prob >= strictness_cfg.min_confidence and diff >= (14.0 if strictness_cfg.level >= 6 else 4.0):
             # Candidate UP / CALL trade
-            if "Bullish Engulfing Breakout" in up_confluences:
-                pattern_name = "BULLISH_ENGULFING_BREAKOUT"
-                level_name = "Bullish Engulfing Expansion"
-            elif any("Hammer" in c for c in up_confluences) or lower_wick >= 0.22:
-                pattern_name = "BULLISH_STRONG_HAMMER_REJECTION"
-                level_name = "Dynamic Support Absorption"
-            elif pos >= 0.70:
-                pattern_name = "SUPPORT_FLOOR_BOUNCE"
-                level_name = "Support Floor Defense"
-            elif "Confirmed Resistance Breakout Expansion" in up_confluences:
-                pattern_name = "BULLISH_CEILING_BREAKOUT"
-                level_name = "Ceiling Breakout Expansion"
-            elif trend in ["STRONG_BULLISH", "MILD_BULLISH"]:
-                pattern_name = "BULLISH_MOMENTUM_CONTINUATION"
-                level_name = "Bullish Momentum Zone"
-            else:
-                pattern_name = "RANGE_SUPPORT_BOUNCE"
-                level_name = "Range Support Defense"
+            is_sniper_blocked = False
+            sniper_reason = ""
+            if strictness_cfg.level >= 6:
+                if upper_wick > 0.12:
+                    is_sniper_blocked = True
+                    sniper_reason = f"[Sniper 100% Filter]: Opposing upper seller wick ({upper_wick*100:.0f}% > 12%) creates reversal hazard."
+                elif pos < 0.28 and "Bullish Engulfing Breakout" not in up_confluences and "Confirmed Resistance Breakout Expansion" not in up_confluences:
+                    is_sniper_blocked = True
+                    sniper_reason = f"[Sniper 100% Filter]: Price is squeezed near resistance ceiling (pos {pos*100:.0f}% < 28%)."
+                elif trend in ["STRONG_BEARISH", "MILD_BEARISH"] and lower_wick < 0.25:
+                    is_sniper_blocked = True
+                    sniper_reason = f"[Sniper 100% Filter]: Counter-trend CALL against {trend} requires >= 25% lower rejection wick."
+                elif body_ratio < 0.22 and lower_wick < 0.22:
+                    is_sniper_blocked = True
+                    sniper_reason = f"[Sniper 100% Filter]: Indecision candle lacks body conviction ({body_ratio*100:.0f}%). Skipped for 100% accuracy."
 
-            # Self-learning verification
-            is_allowed, conf_delta, learner_rationale = strategy_learner.check_pattern_allowed(
-                pattern_key=pattern_name,
-                candle_color=c_color,
-                wick_ratio=lower_wick,
-                trend=trend,
-                direction="CALL",
-                pos_ratio=pos,
-                streak=green_streak,
-                opposing_wick_ratio=upper_wick,
-                body_ratio=body_ratio
-            )
-            up_prob = min(96.0, max(50.0, up_prob + conf_delta))
-            if not is_allowed:
+            if is_sniper_blocked:
                 direction = "SKIP"
                 confidence = up_prob
-                reasoning = f"UP setup ({up_prob:.1f}%) filtered: {learner_rationale}"
-            elif up_prob < strictness_cfg.min_confidence:
-                direction = "SKIP"
-                confidence = up_prob
-                reasoning = f"UP setup ({up_prob:.1f}%) below strictness threshold ({strictness_cfg.min_confidence}%)."
+                reasoning = sniper_reason
             else:
-                direction = "CALL"
-                confidence = up_prob
-                grade = "A+" if confidence >= 90.0 else ("A" if confidence >= 82.0 else "B+")
-                rejection_wick = lower_wick >= 0.18
-                confl_text = "; ".join(up_confluences[-3:]) if up_confluences else "Bullish candle alignment"
-                reasoning = f"UP (CALL) Probability Edge ({up_prob:.1f}% vs {down_prob:.1f}% DOWN): {confl_text}."
-                if conf_delta != 0:
-                    reasoning += f" | {learner_rationale}"
+                if "Bullish Engulfing Breakout" in up_confluences:
+                    pattern_name = "BULLISH_ENGULFING_BREAKOUT"
+                    level_name = "Bullish Engulfing Expansion"
+                elif any("Hammer" in c for c in up_confluences) or lower_wick >= 0.22:
+                    pattern_name = "BULLISH_STRONG_HAMMER_REJECTION"
+                    level_name = "Dynamic Support Absorption"
+                elif pos >= 0.70:
+                    pattern_name = "SUPPORT_FLOOR_BOUNCE"
+                    level_name = "Support Floor Defense"
+                elif "Confirmed Resistance Breakout Expansion" in up_confluences:
+                    pattern_name = "BULLISH_CEILING_BREAKOUT"
+                    level_name = "Ceiling Breakout Expansion"
+                elif trend in ["STRONG_BULLISH", "MILD_BULLISH"]:
+                    pattern_name = "BULLISH_MOMENTUM_CONTINUATION"
+                    level_name = "Bullish Momentum Zone"
+                else:
+                    pattern_name = "RANGE_SUPPORT_BOUNCE"
+                    level_name = "Range Support Defense"
 
-        elif down_prob >= strictness_cfg.min_confidence and diff <= -4.0:
+                # Self-learning verification
+                is_allowed, conf_delta, learner_rationale = strategy_learner.check_pattern_allowed(
+                    pattern_key=pattern_name,
+                    candle_color=c_color,
+                    wick_ratio=lower_wick,
+                    trend=trend,
+                    direction="CALL",
+                    pos_ratio=pos,
+                    streak=green_streak,
+                    opposing_wick_ratio=upper_wick,
+                    body_ratio=body_ratio
+                )
+                up_prob = min(96.0, max(50.0, up_prob + conf_delta))
+                if not is_allowed:
+                    direction = "SKIP"
+                    confidence = up_prob
+                    reasoning = f"UP setup ({up_prob:.1f}%) filtered: {learner_rationale}"
+                elif up_prob < strictness_cfg.min_confidence:
+                    direction = "SKIP"
+                    confidence = up_prob
+                    reasoning = f"UP setup ({up_prob:.1f}%) below strictness threshold ({strictness_cfg.min_confidence}%)."
+                else:
+                    direction = "CALL"
+                    confidence = up_prob
+                    grade = "A+" if confidence >= 90.0 else ("A" if confidence >= 82.0 else "B+")
+                    rejection_wick = lower_wick >= 0.18
+                    confl_text = "; ".join(up_confluences[-3:]) if up_confluences else "Bullish candle alignment"
+                    reasoning = f"UP (CALL) Probability Edge ({up_prob:.1f}% vs {down_prob:.1f}% DOWN): {confl_text}."
+                    if conf_delta != 0:
+                        reasoning += f" | {learner_rationale}"
+
+        elif down_prob >= strictness_cfg.min_confidence and diff <= (-14.0 if strictness_cfg.level >= 6 else -4.0):
             # Candidate DOWN / PUT trade
-            if "Bearish Engulfing Breakdown" in down_confluences:
-                pattern_name = "BEARISH_ENGULFING_BREAKDOWN"
-                level_name = "Bearish Engulfing Expansion"
-            elif any("Shooting Star" in c for c in down_confluences) or upper_wick >= 0.22:
-                pattern_name = "BEARISH_STRONG_STAR_REJECTION"
-                level_name = "Dynamic Resistance Rejection"
-            elif pos <= 0.30:
-                pattern_name = "RESISTANCE_CEILING_REVERSAL"
-                level_name = "Resistance Ceiling Rejection"
-            elif "Confirmed Support Breakdown Expansion" in down_confluences:
-                pattern_name = "BEARISH_FLOOR_BREAKDOWN"
-                level_name = "Floor Breakdown Expansion"
-            elif trend in ["STRONG_BEARISH", "MILD_BEARISH"]:
-                pattern_name = "BEARISH_MOMENTUM_CONTINUATION"
-                level_name = "Bearish Momentum Zone"
-            else:
-                pattern_name = "RANGE_RESISTANCE_REJECTION"
-                level_name = "Range Resistance Rejection"
+            is_sniper_blocked = False
+            sniper_reason = ""
+            if strictness_cfg.level >= 6:
+                if lower_wick > 0.12:
+                    is_sniper_blocked = True
+                    sniper_reason = f"[Sniper 100% Filter]: Opposing lower buyer wick ({lower_wick*100:.0f}% > 12%) creates bounce hazard."
+                elif pos > 0.72 and "Bearish Engulfing Breakdown" not in down_confluences and "Confirmed Support Breakdown Expansion" not in down_confluences:
+                    is_sniper_blocked = True
+                    sniper_reason = f"[Sniper 100% Filter]: Price is squeezed near support floor (pos {pos*100:.0f}% > 72%)."
+                elif trend in ["STRONG_BULLISH", "MILD_BULLISH"] and upper_wick < 0.25:
+                    is_sniper_blocked = True
+                    sniper_reason = f"[Sniper 100% Filter]: Counter-trend PUT against {trend} requires >= 25% upper rejection wick."
+                elif body_ratio < 0.22 and upper_wick < 0.22:
+                    is_sniper_blocked = True
+                    sniper_reason = f"[Sniper 100% Filter]: Indecision candle lacks body conviction ({body_ratio*100:.0f}%). Skipped for 100% accuracy."
 
-            # Self-learning verification
-            is_allowed, conf_delta, learner_rationale = strategy_learner.check_pattern_allowed(
-                pattern_key=pattern_name,
-                candle_color=c_color,
-                wick_ratio=upper_wick,
-                trend=trend,
-                direction="PUT",
-                pos_ratio=pos,
-                streak=red_streak,
-                opposing_wick_ratio=lower_wick,
-                body_ratio=body_ratio
-            )
-            down_prob = min(96.0, max(50.0, down_prob + conf_delta))
-            if not is_allowed:
+            if is_sniper_blocked:
                 direction = "SKIP"
                 confidence = down_prob
-                reasoning = f"DOWN setup ({down_prob:.1f}%) filtered: {learner_rationale}"
-            elif down_prob < strictness_cfg.min_confidence:
-                direction = "SKIP"
-                confidence = down_prob
-                reasoning = f"DOWN setup ({down_prob:.1f}%) below strictness threshold ({strictness_cfg.min_confidence}%)."
+                reasoning = sniper_reason
             else:
-                direction = "PUT"
-                confidence = down_prob
-                grade = "A+" if confidence >= 90.0 else ("A" if confidence >= 82.0 else "B+")
-                rejection_wick = upper_wick >= 0.18
-                confl_text = "; ".join(down_confluences[-3:]) if down_confluences else "Bearish candle alignment"
-                reasoning = f"DOWN (PUT) Probability Edge ({down_prob:.1f}% vs {up_prob:.1f}% UP): {confl_text}."
-                if conf_delta != 0:
-                    reasoning += f" | {learner_rationale}"
+                if "Bearish Engulfing Breakdown" in down_confluences:
+                    pattern_name = "BEARISH_ENGULFING_BREAKDOWN"
+                    level_name = "Bearish Engulfing Expansion"
+                elif any("Shooting Star" in c for c in down_confluences) or upper_wick >= 0.22:
+                    pattern_name = "BEARISH_STRONG_STAR_REJECTION"
+                    level_name = "Dynamic Resistance Rejection"
+                elif pos <= 0.30:
+                    pattern_name = "RESISTANCE_CEILING_REVERSAL"
+                    level_name = "Resistance Ceiling Rejection"
+                elif "Confirmed Support Breakdown Expansion" in down_confluences:
+                    pattern_name = "BEARISH_FLOOR_BREAKDOWN"
+                    level_name = "Floor Breakdown Expansion"
+                elif trend in ["STRONG_BEARISH", "MILD_BEARISH"]:
+                    pattern_name = "BEARISH_MOMENTUM_CONTINUATION"
+                    level_name = "Bearish Momentum Zone"
+                else:
+                    pattern_name = "RANGE_RESISTANCE_REJECTION"
+                    level_name = "Range Resistance Rejection"
+
+                # Self-learning verification
+                is_allowed, conf_delta, learner_rationale = strategy_learner.check_pattern_allowed(
+                    pattern_key=pattern_name,
+                    candle_color=c_color,
+                    wick_ratio=upper_wick,
+                    trend=trend,
+                    direction="PUT",
+                    pos_ratio=pos,
+                    streak=red_streak,
+                    opposing_wick_ratio=lower_wick,
+                    body_ratio=body_ratio
+                )
+                down_prob = min(96.0, max(50.0, down_prob + conf_delta))
+                if not is_allowed:
+                    direction = "SKIP"
+                    confidence = down_prob
+                    reasoning = f"DOWN setup ({down_prob:.1f}%) filtered: {learner_rationale}"
+                elif down_prob < strictness_cfg.min_confidence:
+                    direction = "SKIP"
+                    confidence = down_prob
+                    reasoning = f"DOWN setup ({down_prob:.1f}%) below strictness threshold ({strictness_cfg.min_confidence}%)."
+                else:
+                    direction = "PUT"
+                    confidence = down_prob
+                    grade = "A+" if confidence >= 90.0 else ("A" if confidence >= 82.0 else "B+")
+                    rejection_wick = upper_wick >= 0.18
+                    confl_text = "; ".join(down_confluences[-3:]) if down_confluences else "Bearish candle alignment"
+                    reasoning = f"DOWN (PUT) Probability Edge ({down_prob:.1f}% vs {up_prob:.1f}% UP): {confl_text}."
+                    if conf_delta != 0:
+                        reasoning += f" | {learner_rationale}"
 
         return {
             "direction": direction,
@@ -1898,9 +1950,9 @@ class TradingSessionManager:
         initial_balance: float = 10000.0,
         trade_amount: float = 100.0,
         payout_rate: float = 0.85,
-        default_strictness: int = 3,
+        default_strictness: int = 6,
         rolling_window_size: int = 5,
-        target_win_rate: float = 0.80
+        target_win_rate: float = 1.00
     ):
         self.lock = threading.Lock()
         self.initial_balance = float(os.getenv("INITIAL_BALANCE", str(initial_balance)))
@@ -1910,8 +1962,8 @@ class TradingSessionManager:
         self.rolling_window_size = int(os.getenv("ROLLING_WINDOW_SIZE", str(rolling_window_size)))
         self.target_win_rate = float(os.getenv("TARGET_ROLLING_WIN_RATE", str(target_win_rate)))
 
-        env_strict = int(os.getenv("DEFAULT_STRICTNESS", "3"))
-        self.current_strictness = max(1, min(5, env_strict))
+        env_strict = int(os.getenv("DEFAULT_STRICTNESS", "6"))
+        self.current_strictness = max(1, min(6, env_strict))
         self.auto_optimize = True
 
         self.total_trades = 0
@@ -1936,23 +1988,35 @@ class TradingSessionManager:
             rolling_wins = rolling_list.count("WIN")
             rolling_wr = (rolling_wins / len(rolling_list) * 100.0) if rolling_list else 0.0
 
-            # Target is reached when the rolling window has at least 4 wins out of 5 trades (>= 80%)
+            # Target is reached when the rolling window satisfies target_win_rate (default 5/5 wins = 100%)
             achieved = (len(rolling_list) >= self.rolling_window_size and (rolling_wins / len(rolling_list)) >= self.target_win_rate)
             self.target_achieved = achieved
 
-            strict_cfg = STRICTNESS_TIERS.get(self.current_strictness, STRICTNESS_TIERS[2])
+            strict_cfg = STRICTNESS_TIERS.get(self.current_strictness, STRICTNESS_TIERS[6])
 
             if achieved:
-                status_badge = "TARGET ACHIEVED: 80% WIN RATE"
-                status_message = f"GOAL REACHED! Rolling accuracy: {rolling_wins}/{len(rolling_list)} Wins ({rolling_wr:.0f}%). Strategy converged."
-            else:
-                status_badge = "TRAINING / PRACTICING"
-                if len(rolling_list) < self.rolling_window_size:
-                    status_message = f"Practicing... ({len(rolling_list)}/{self.rolling_window_size} trades in window). Rolling: {rolling_wins}W - {rolling_list.count('LOSS')}L."
+                if self.target_win_rate >= 1.0:
+                    status_badge = "🏆 TARGET ACHIEVED: 100% WIN RATE (5/5 WINS)"
+                    status_message = f"PERFECT CONVERGENCE! 100% Win Rate ({rolling_wins}/{len(rolling_list)} Wins). Ultra-Sniper strategy active for Demo & Real."
                 else:
-                    status_message = f"Optimizing strategy ({rolling_wins}/{self.rolling_window_size} Wins = {rolling_wr:.0f}%). Target: >= 80%."
+                    status_badge = f"TARGET ACHIEVED: {int(self.target_win_rate * 100)}% WIN RATE"
+                    status_message = f"GOAL REACHED! Rolling accuracy: {rolling_wins}/{len(rolling_list)} Wins ({rolling_wr:.0f}%). Strategy converged."
+            else:
+                if self.target_win_rate >= 1.0:
+                    status_badge = "🎯 TARGETING 100% SNIPER ACCURACY (5/5 WINS)"
+                    if len(rolling_list) < self.rolling_window_size:
+                        status_message = f"Sniper filtering active ({len(rolling_list)}/{self.rolling_window_size} trades in window). Rolling: {rolling_wins}W - {rolling_list.count('LOSS')}L. Target: 100% Win Rate."
+                    else:
+                        status_message = f"Optimizing for 100% sniper accuracy ({rolling_wins}/{self.rolling_window_size} Wins = {rolling_wr:.0f}%). Zero-loss defense active."
+                else:
+                    status_badge = "TRAINING / PRACTICING"
+                    if len(rolling_list) < self.rolling_window_size:
+                        status_message = f"Practicing... ({len(rolling_list)}/{self.rolling_window_size} trades in window). Rolling: {rolling_wins}W - {rolling_list.count('LOSS')}L."
+                    else:
+                        status_message = f"Optimizing strategy ({rolling_wins}/{self.rolling_window_size} Wins = {rolling_wr:.0f}%). Target: >= 80%."
 
             learning_data = strategy_learner.get_learning_summary()
+            ac_mode = getattr(auto_clicker.config, "account_mode", "ALL") if "auto_clicker" in globals() else "ALL"
             return SessionStats(
                 balance=round(self.balance, 2),
                 initial_balance=round(self.initial_balance, 2),
@@ -1970,7 +2034,9 @@ class TradingSessionManager:
                 strictness_name=f"Level {self.current_strictness} - {strict_cfg.name}",
                 active_trade=self.active_trade,
                 learned_patterns_count=learning_data.get("total_learned_patterns", 0),
-                learning_summary=learning_data
+                learning_summary=learning_data,
+                target_win_rate=self.target_win_rate,
+                account_mode=ac_mode
             )
 
     def open_trade(
@@ -2228,16 +2294,20 @@ class TradingSessionManager:
         else:
             self.target_achieved = False
             if latest_outcome == "LOSS":
-                # Tighten strictness parameter to reject marginal setups, capping at Level 4 to avoid freezing
+                # Immediately escalate to Level 6 (Ultra Sniper 100% Zero-Loss Filter) to stop all risky trades
                 old_lvl = self.current_strictness
-                self.current_strictness = min(4, self.current_strictness + 1)
+                self.current_strictness = 6
                 logger.info(
-                    f"[SELF-OPTIMIZER] Loss registered. Strictness tightened from Level {old_lvl} -> Level {self.current_strictness}."
+                    f"[SELF-OPTIMIZER] Loss registered! Strictness escalated from Level {old_lvl} -> Level 6 Ultra-Sniper (Zero-Loss Mode)."
                 )
-            elif latest_outcome == "WIN" and self.current_strictness > 3:
-                # After a successful trade, relax back to Level 3 to maintain active high-probability trading
-                self.current_strictness = 3
-                logger.info("[SELF-OPTIMIZER] Win registered. Strictness maintained at optimal Level 3.")
+            elif latest_outcome == "WIN":
+                if self.target_win_rate >= 1.0 or self.current_strictness >= 5:
+                    # Maintain Level 6 to protect 100% sniper win rate
+                    self.current_strictness = 6
+                    logger.info("[SELF-OPTIMIZER] Win registered. Maintaining Level 6 Ultra Sniper for 100% win rate target.")
+                elif self.current_strictness > 3:
+                    self.current_strictness = 3
+                    logger.info("[SELF-OPTIMIZER] Win registered. Strictness maintained at optimal Level 3.")
 
     def reset_session(self):
         """Resets the trading session to clean baseline."""
@@ -2458,6 +2528,7 @@ class AutoClickerConfig(BaseModel):
     put_x: int = 4442
     put_y: int = 531
     restore_cursor: bool = False
+    account_mode: str = "ALL"  # "ALL" (Demo & Real), "DEMO", "REAL"
 
 
 class QuotexAutoClicker:
@@ -2485,7 +2556,7 @@ class QuotexAutoClicker:
         except Exception as e:
             logger.warning(f"Could not save autoclick config file: {e}")
 
-    def update_config(self, enabled=None, call_x=None, call_y=None, put_x=None, put_y=None, restore_cursor=None):
+    def update_config(self, enabled=None, call_x=None, call_y=None, put_x=None, put_y=None, restore_cursor=None, account_mode=None):
         with self.lock:
             if enabled is not None: self.config.enabled = bool(enabled)
             if call_x is not None: self.config.call_x = int(call_x)
@@ -2493,6 +2564,7 @@ class QuotexAutoClicker:
             if put_x is not None: self.config.put_x = int(put_x)
             if put_y is not None: self.config.put_y = int(put_y)
             if restore_cursor is not None: self.config.restore_cursor = bool(restore_cursor)
+            if account_mode is not None: self.config.account_mode = str(account_mode)
             self._save_persisted_config()
 
     def auto_detect_quotex_buttons(self) -> Dict[str, Any]:

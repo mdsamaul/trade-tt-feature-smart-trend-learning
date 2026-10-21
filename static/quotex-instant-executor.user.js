@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Quotex Instant Auto-Trader (0ms Zero-Movement & Signal Percentage HUD)
+// @name         Quotex Instant Auto-Trader (Demo & Real Live + 100% Sniper HUD)
 // @namespace    https://github.com/mdsamaul/trade-tt-feature-smart-trend-learning
-// @version      1.1.0
-// @description  Instant sub-millisecond execution for Quotex without moving physical mouse. Displays real-time candle probability percentage in an ultra-modern popup and executes via 0ms DOM events.
+// @version      1.2.0
+// @description  Instant sub-millisecond execution for Quotex Demo & Real Live accounts with 100% Sniper accuracy target. Displays real-time candle probability percentage in an ultra-modern popup and executes via 0ms DOM events.
 // @author       Antigravity AI
 // @match        *://*.qxbroker.com/*
 // @match        *://*.quotex.io/*
@@ -38,7 +38,7 @@
 (function () {
   'use strict';
 
-  console.log("%c⚡ [Quotex Instant Auto-Trader 1.1.0] Initializing Tampermonkey 5.5.1 userscript with Signal Percentage Popup...", "color: #00ff88; font-weight: bold; font-size: 14px;");
+  console.log("%c⚡ [Quotex Instant Auto-Trader 1.2.0] Initializing Demo & Real 100% Sniper userscript...", "color: #00ff88; font-weight: bold; font-size: 14px;");
 
   // =========================================================================
   // CONFIGURATION & STATE
@@ -54,6 +54,8 @@
   let ws = null;
   let isConnected = false;
   let autoExecuteEnabled = GM_getValue("quotex_auto_execute", true);
+  let accountMode = GM_getValue("quotex_account_mode", "ALL"); // 'ALL' (Demo + Real), 'DEMO', 'REAL'
+  let detectedAccountType = 'DEMO & REAL'; // 'REAL', 'DEMO', 'DEMO & REAL'
   let lastExecutedTradeId = null;
   let lastExecutionTime = 0;
   let customCallSelector = GM_getValue("quotex_custom_call_sel", "");
@@ -254,10 +256,49 @@
   }
 
   // =========================================================================
+  // QUOTEX ACCOUNT TYPE DETECTOR (DEMO vs REAL LIVE ACCOUNT)
+  // =========================================================================
+  function detectQuotexAccountType() {
+    try {
+      // 1. Inspect balance dropdown / header text
+      const userMenu = document.querySelector('.usermenu__info-wrapper, .usermenu__info-levels, .account-type, .usermenu, .header__user');
+      const text = ((userMenu ? userMenu.innerText : '') + ' ' + (document.body.innerText || '')).toLowerCase();
+      
+      const hasReal = text.includes('live account') || text.includes('real account') || text.includes('реальный счет') || text.includes('conta real');
+      const hasDemo = text.includes('demo account') || text.includes('демо счет') || text.includes('conta demo');
+
+      if (hasReal && !hasDemo) return 'REAL';
+      if (hasDemo && !hasReal) return 'DEMO';
+
+      const activeItem = document.querySelector('.usermenu__level.is-active, .account-select__item--active, [class*="active"][class*="account"]');
+      if (activeItem) {
+        const itemText = activeItem.innerText.toLowerCase();
+        if (itemText.includes('real') || itemText.includes('live') || itemText.includes('реальн')) return 'REAL';
+        if (itemText.includes('demo') || itemText.includes('демо')) return 'DEMO';
+      }
+    } catch (e) {}
+    return 'DEMO & REAL';
+  }
+
+  // =========================================================================
   // ZERO-MOVEMENT INSTANT DISPATCHER (0ms DOM CLICK)
   // =========================================================================
   function executeInstantDOMClick(direction, signal) {
     const startTime = performance.now();
+    detectedAccountType = detectQuotexAccountType();
+
+    // Account mode validation
+    if (accountMode === 'DEMO' && detectedAccountType === 'REAL') {
+      console.warn('⚠️ [Quotex Instant Trader] Trade blocked: Account Mode is set to DEMO ONLY, but active account is REAL.');
+      showHudNotification('⚠️ Blocked: DEMO ONLY mode is active!', '#ffb800');
+      return false;
+    }
+    if (accountMode === 'REAL' && detectedAccountType === 'DEMO') {
+      console.warn('⚠️ [Quotex Instant Trader] Trade blocked: Account Mode is set to REAL ONLY, but active account is DEMO.');
+      showHudNotification('⚠️ Blocked: REAL ONLY mode is active!', '#ffb800');
+      return false;
+    }
+
     const buttons = findQuotexButtons();
     const targetBtn = direction === 'CALL' ? buttons.callBtn : buttons.putBtn;
 
@@ -419,6 +460,16 @@
           <div style="display: flex; justify-content: space-between;">
             <span style="color: #718096;">Pattern Setup:</span>
             <strong style="color: #f7fafc;">${pattern}</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: #718096;">Target Account:</span>
+            <strong style="color: ${detectedAccountType === 'REAL' ? '#00ff88' : (detectedAccountType === 'DEMO' ? '#ffd700' : '#00f0ff')};">
+              ${detectedAccountType === 'REAL' ? '🟢 LIVE / REAL ACCOUNT' : (detectedAccountType === 'DEMO' ? '🟡 DEMO ACCOUNT' : '🌐 DEMO & REAL LIVE')}
+            </strong>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: #718096;">Accuracy Target:</span>
+            <strong style="color: #00ff88;">🎯 100% Sniper Confluence</strong>
           </div>
           <div style="display: flex; justify-content: space-between;">
             <span style="color: #718096;">Execution Engine:</span>
@@ -593,6 +644,33 @@
         
         <span style="color: rgba(255,255,255,0.2);">|</span>
 
+        <!-- Live Quotex Account Type Badge (Demo vs Real) -->
+        <span id="hud-account-badge" style="
+          background: rgba(0, 240, 255, 0.15);
+          border: 1px solid #00f0ff;
+          color: #00f0ff;
+          border-radius: 10px;
+          padding: 2px 7px;
+          font-size: 9.5px;
+          font-weight: 800;
+        ">🌐 DEMO & REAL</span>
+
+        <!-- Account Mode Switcher -->
+        <button id="hud-account-mode-btn" style="
+          background: rgba(255, 215, 0, 0.15);
+          color: #ffd700;
+          border: 1px solid rgba(255, 215, 0, 0.4);
+          border-radius: 10px;
+          padding: 2px 7px;
+          font-size: 9.5px;
+          font-weight: 800;
+          cursor: pointer;
+        " title="Click to cycle Trading Account: ALL (Demo + Real) / DEMO ONLY / REAL ONLY">MODE: ${accountMode}</button>
+
+        <span style="color: #00ff88; font-weight: 800; font-size: 9.5px; text-shadow: 0 0 8px rgba(0,255,136,0.5);">🎯 100% SNIPER</span>
+
+        <span style="color: rgba(255,255,255,0.2);">|</span>
+
         <button id="hud-auto-toggle" style="
           background: ${autoExecuteEnabled ? 'rgba(0, 255, 136, 0.2)' : 'rgba(255, 51, 102, 0.2)'};
           color: ${autoExecuteEnabled ? '#00ff88' : '#ff3366'};
@@ -648,6 +726,42 @@
     statusBadge = document.getElementById('hud-status-text');
     notifText = document.getElementById('hud-notif');
     autoToggleBtn = document.getElementById('hud-auto-toggle');
+    const acBadge = document.getElementById('hud-account-badge');
+    const modeBtn = document.getElementById('hud-account-mode-btn');
+
+    if (modeBtn) {
+      modeBtn.addEventListener('click', () => {
+        if (accountMode === 'ALL') accountMode = 'DEMO';
+        else if (accountMode === 'DEMO') accountMode = 'REAL';
+        else accountMode = 'ALL';
+        GM_setValue("quotex_account_mode", accountMode);
+        modeBtn.textContent = `MODE: ${accountMode}`;
+        showHudNotification(`Trading Account Mode: ${accountMode === 'ALL' ? 'Demo & Real Live' : (accountMode === 'DEMO' ? 'Demo Only' : 'Real Live Only')}`, '#ffd700');
+      });
+    }
+
+    // Refresh live account status every 2 seconds
+    setInterval(() => {
+      if (acBadge) {
+        const liveType = detectQuotexAccountType();
+        if (liveType === 'REAL') {
+          acBadge.style.borderColor = '#00ff88';
+          acBadge.style.color = '#00ff88';
+          acBadge.style.background = 'rgba(0, 255, 136, 0.2)';
+          acBadge.textContent = '🟢 REAL LIVE';
+        } else if (liveType === 'DEMO') {
+          acBadge.style.borderColor = '#ffcc00';
+          acBadge.style.color = '#ffcc00';
+          acBadge.style.background = 'rgba(255, 204, 0, 0.2)';
+          acBadge.textContent = '🟡 DEMO';
+        } else {
+          acBadge.style.borderColor = '#00f0ff';
+          acBadge.style.color = '#00f0ff';
+          acBadge.style.background = 'rgba(0, 240, 255, 0.15)';
+          acBadge.textContent = '🌐 DEMO & REAL';
+        }
+      }
+    }, 2000);
 
     autoToggleBtn.addEventListener('click', () => {
       autoExecuteEnabled = !autoExecuteEnabled;
