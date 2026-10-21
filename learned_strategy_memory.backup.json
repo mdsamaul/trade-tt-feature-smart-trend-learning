@@ -35,8 +35,8 @@
       "losses": 8,
       "draws": 0,
       "win_rate": 84.0,
-      "consecutive_losses": 1,
-      "status": "DEFENSIVE_COOLDOWN",
+      "consecutive_losses": 0,
+      "status": "BOOSTED",
       "last_feedback": "LOSS: Price reversed by 0.00020 against CALL entry (1.08560 -> 1.08540). Setup thesis invalidated. | DEFENSE: AI DEFENSE ACTIVATED: Elevated strictness and defensive cooldown on pattern 'BULLISH_STRONG_HAMMER_REJECTION'.",
       "last_loss_root_cause": "Price reversed by 0.00020 against CALL entry (1.08560 -> 1.08540). Setup thesis invalidated.",
       "loss_causes": [
@@ -86,8 +86,8 @@
       "losses": 4,
       "draws": 0,
       "win_rate": 33.3,
-      "consecutive_losses": 1,
-      "status": "BLOCKED",
+      "consecutive_losses": 0,
+      "status": "ACTIVE",
       "last_feedback": "LOSS: Price reversed by 0.00020 against PUT entry (1.08466 -> 1.08486). Setup thesis invalidated. | DEFENSE: AI DEFENSE ACTIVATED: Elevated strictness and defensive cooldown on pattern 'BEARISH_MOMENTUM_CONTINUATION'.",
       "last_loss_root_cause": "Price reversed by 0.00020 against PUT entry (1.08466 -> 1.08486). Setup thesis invalidated.",
       "loss_causes": [
@@ -120,7 +120,7 @@
       "draws": 0,
       "win_rate": 33.3,
       "consecutive_losses": 0,
-      "status": "BLOCKED",
+      "status": "ACTIVE",
       "last_feedback": "WIN: Bearish confirmation: Price fell by -0.00020 (1.08518 -> 1.08498). Trend STRONG_BULLISH seller dominance prevailed.",
       "last_loss_root_cause": "PUT failed against dominant STRONG_BULLISH market (+0.00020). Buyers overpowered seller attempt.",
       "loss_causes": [
@@ -169,8 +169,8 @@
       "losses": 2,
       "draws": 0,
       "win_rate": 0.0,
-      "consecutive_losses": 2,
-      "status": "DEFENSIVE_COOLDOWN",
+      "consecutive_losses": 0,
+      "status": "ACTIVE",
       "last_feedback": "LOSS: CALL failed near Resistance ceiling (pos 0%). Overhead supply wall triggered downward reversal (-0.00020). | DEFENSE: AI DEFENSE ACTIVATED: Block CALL when within 20% of Resistance ceiling during sideways consolidation or when seller rejection wick >= 35%.",
       "last_loss_root_cause": "CALL failed near Resistance ceiling (pos 0%). Overhead supply wall triggered downward reversal (-0.00020).",
       "loss_causes": [
@@ -225,19 +225,19 @@
     },
     "BEARISH_ENGULFING_BREAKDOWN": {
       "name": "BEARISH_ENGULFING_BREAKDOWN",
-      "total_trades": 3,
+      "total_trades": 4,
       "wins": 2,
-      "losses": 1,
+      "losses": 2,
       "draws": 0,
-      "win_rate": 66.7,
-      "consecutive_losses": 1,
-      "status": "DEFENSIVE_COOLDOWN",
-      "last_feedback": "LOSS: Price reversed by 0.00020 against PUT entry (1.08228 -> 1.08248). Setup thesis invalidated. | DEFENSE: AI DEFENSE ACTIVATED: Elevated strictness and defensive cooldown on pattern 'BEARISH_ENGULFING_BREAKDOWN'.",
-      "last_loss_root_cause": "Price reversed by 0.00020 against PUT entry (1.08228 -> 1.08248). Setup thesis invalidated.",
+      "win_rate": 50.0,
+      "consecutive_losses": 0,
+      "status": "ACTIVE",
+      "last_feedback": "LOSS: Price reversed by 0.00020 against PUT entry (1.08280 -> 1.08300). Setup thesis invalidated. | DEFENSE: AI DEFENSE ACTIVATED: Elevated strictness and defensive cooldown on pattern 'BEARISH_ENGULFING_BREAKDOWN'.",
+      "last_loss_root_cause": "Price reversed by 0.00020 against PUT entry (1.08280 -> 1.08300). Setup thesis invalidated.",
       "loss_causes": [
         "AI DEFENSE ACTIVATED: Elevated strictness and defensive cooldown on pattern 'BEARISH_ENGULFING_BREAKDOWN'."
       ],
-      "learned_at": "2026-10-21 14:36:59"
+      "learned_at": "2026-10-21 14:44:59"
     }
   },
   "anti_patterns": {
@@ -287,8 +287,8 @@
       "cause_code": "PUT_MOMENTUM_FAILURE",
       "description": "Price reversed by 0.00020 against PUT entry (1.08330 -> 1.08350). Setup thesis invalidated.",
       "actionable_rule": "AI DEFENSE ACTIVATED: Elevated strictness and defensive cooldown on pattern 'BEARISH_STRONG_STAR_REJECTION'.",
-      "trigger_count": 8,
-      "last_detected": "2026-10-21 14:36:59"
+      "trigger_count": 9,
+      "last_detected": "2026-10-21 14:44:59"
     },
     "COUNTER_TREND_BEARISH_TRAP": {
       "cause_code": "COUNTER_TREND_BEARISH_TRAP",
@@ -338,6 +338,20 @@
     "DEFENSE_PUT_MOMENTUM_FAILURE: AI DEFENSE ACTIVATED: Elevated strictness and defensive cooldown on pattern 'BEARISH_ENGULFING_BREAKDOWN'."
   ],
   "trades_history": [
+    {
+      "id": "2a034f66",
+      "timestamp": "14:44:00",
+      "direction": "PUT",
+      "entry_price": 1.0828,
+      "close_price": 1.083,
+      "outcome": "LOSS",
+      "pnl": -100.0,
+      "confidence": 96.0,
+      "pattern_name": "BEARISH_ENGULFING_BREAKDOWN",
+      "trend": "STRONG_BEARISH",
+      "outcome_reason": "Price reversed by 0.00020 against PUT entry (1.08280 -> 1.08300). Setup thesis invalidated.",
+      "learning_insight": "AI DEFENSE ACTIVATED: Elevated strictness and defensive cooldown on pattern 'BEARISH_ENGULFING_BREAKDOWN'."
+    },
     {
       "id": "8496effb",
       "timestamp": "14:36:00",
@@ -1723,25 +1737,11 @@
       "trend": "STRONG_BULLISH",
       "outcome_reason": "Price reversed by 0.00020 against CALL entry (1.08498 -> 1.08478). Setup thesis invalidated.",
       "learning_insight": "AI DEFENSE ACTIVATED: Elevated strictness and defensive cooldown on pattern 'BULLISH_STRONG_HAMMER_REJECTION'."
-    },
-    {
-      "id": "b113c3a1",
-      "timestamp": "15:52:09",
-      "direction": "CALL",
-      "entry_price": 1.08463,
-      "close_price": 1.08483,
-      "outcome": "WIN",
-      "pnl": 85.0,
-      "confidence": 94.5,
-      "pattern_name": "BULLISH_STRONG_HAMMER_REJECTION",
-      "trend": "STRONG_BULLISH",
-      "outcome_reason": "Bullish confirmation: Price rose by +0.00020 (1.08463 -> 1.08483). Trend STRONG_BULLISH buyer dominance prevailed.",
-      "learning_insight": "Confirmed winning edge on BULLISH_STRONG_HAMMER_REJECTION: Trend-following CALL reinforced."
     }
   ],
   "persistence_status": {
     "protected": true,
     "dual_backup_active": true,
-    "last_sync": "2026-10-21 14:36:59"
+    "last_sync": "2026-10-21 14:44:59"
   }
 }
