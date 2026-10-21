@@ -1994,6 +1994,7 @@
     // =========================================================================
     let isCycleBusy = false;
     let lastExecutedBucket = -1;
+    let executionPendingBucket = null;
     let lastScanMs = 0;
 
     async function executeCycle(forceVerification = false, executeTrade = false) {
@@ -2042,6 +2043,16 @@
         console.error("Cycle execution error:", err);
       } finally {
         isCycleBusy = false;
+        // If an execution was queued because cycle was busy during boundary, dispatch it immediately!
+        if (executionPendingBucket !== null) {
+          const targetBucket = executionPendingBucket;
+          executionPendingBucket = null;
+          if (autoTradingActive && !activePendingTrade && lastExecutedBucket !== targetBucket) {
+            lastExecutedBucket = targetBucket;
+            console.log("⚡ [BOUNDARY QUEUE] Immediate dispatch of queued boundary trade for bucket:", targetBucket);
+            executeCycle(false, true);
+          }
+        }
       }
     }
 
@@ -2201,20 +2212,26 @@
       const currentBucket = Math.floor(nowMs / (candleTimeframe * 1000));
 
       // 1. Precise Trade Execution Check:
-      // When auto-trading is active AND we hit candle boundary (last 2 seconds or first 1 second of candle)
-      // AND we haven't already executed for this bucket:
-      const isBoundaryWindow = (secondsLeft <= 2 || secondsLeft >= (candleTimeframe - 1));
-      if (autoTradingActive && isBoundaryWindow && lastExecutedBucket !== currentBucket && !isCycleBusy && !activePendingTrade) {
-        lastExecutedBucket = currentBucket;
-        lastScanMs = nowMs;
-        executeCycle(false, true); // Open paper trade and trigger auto-click!
-        return;
+      // When auto-trading is active AND we hit candle boundary (last 3 seconds or first 2 seconds of new candle)
+      // AND we haven't already executed for this candle bucket:
+      const isBoundaryWindow = (secondsLeft <= 3 || secondsLeft >= (candleTimeframe - 2));
+      if (autoTradingActive && isBoundaryWindow && lastExecutedBucket !== currentBucket && !activePendingTrade) {
+        if (!isCycleBusy) {
+          lastExecutedBucket = currentBucket;
+          lastScanMs = nowMs;
+          executeCycle(false, true); // Open paper trade and trigger auto-click!
+          return;
+        } else {
+          // Cycle was finishing a scan; queue boundary execution immediately for when it frees up
+          executionPendingBucket = currentBucket;
+        }
       }
 
-      // 2. Continuous Active Auto-Scanner Heartbeat (Runs every 2.5 seconds automatically!)
-      // Scans live chart, updates preview, price, trend, and checks trade expiry resolution
+      // 2. Continuous Active Auto-Scanner Heartbeat (Runs every 2.5 seconds automatically)
+      // Pauses when within 5 seconds of candle boundary to prevent race conditions with trade execution!
+      const isNearBoundary = (secondsLeft <= 5 || secondsLeft >= (candleTimeframe - 2));
       const scanInterval = 2500; // 2.5 seconds
-      if ((nowMs - lastScanMs >= scanInterval) && !isCycleBusy) {
+      if (!isNearBoundary && (nowMs - lastScanMs >= scanInterval) && !isCycleBusy) {
         lastScanMs = nowMs;
         executeCycle(false, false);
       }

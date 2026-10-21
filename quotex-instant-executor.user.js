@@ -665,8 +665,8 @@
               if (data && data.signal) {
                 const sig = data.signal;
                 const sigTime = sig.timestamp || 0;
-                // If signal was issued in last 3 seconds and hasn't been executed
-                if (Date.now() - sigTime < 3000) {
+                // If signal was issued in last 15 seconds and hasn't been executed
+                if (Math.abs(Date.now() - sigTime) < 15000 && sig.trade_id !== lastExecutedTradeId) {
                   handleIncomingTradeSignal(sig);
                 }
               }

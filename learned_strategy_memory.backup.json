@@ -7,7 +7,7 @@
       "losses": 4,
       "draws": 0,
       "win_rate": 20.0,
-      "consecutive_losses": 3,
+      "consecutive_losses": 0,
       "status": "BLOCKED",
       "last_feedback": "LOSS: Weak upper wick (<25%) on green body. Market continued surging. BLOCKED by Self-Learning Engine.",
       "last_loss_root_cause": "",
@@ -21,7 +21,7 @@
       "losses": 2,
       "draws": 0,
       "win_rate": 33.3,
-      "consecutive_losses": 1,
+      "consecutive_losses": 0,
       "status": "BLOCKED",
       "last_feedback": "LOSS: Weak lower wick (<25%) on red body. Dip was not absorbed. BLOCKED by Self-Learning Engine.",
       "last_loss_root_cause": "",
@@ -30,20 +30,21 @@
     },
     "BULLISH_STRONG_HAMMER_REJECTION": {
       "name": "BULLISH_STRONG_HAMMER_REJECTION",
-      "total_trades": 49,
+      "total_trades": 50,
       "wins": 42,
-      "losses": 7,
+      "losses": 8,
       "draws": 0,
-      "win_rate": 85.7,
+      "win_rate": 84.0,
       "consecutive_losses": 0,
       "status": "BOOSTED",
-      "last_feedback": "WIN: Bullish confirmation: Price rose by +0.00020 (1.08353 -> 1.08373). Trend STRONG_BEARISH buyer dominance prevailed.",
-      "last_loss_root_cause": "CALL failed against dominant STRONG_BEARISH market (-0.00020). Sellers overpowered buyer attempt.",
+      "last_feedback": "LOSS: Candle body too narrow (19%). Lacked institutional momentum and reversed into chop (-0.00020). | DEFENSE: AI DEFENSE ACTIVATED: Require minimum body ratio or clean rejection pin-bar to filter low-liquidity traps.",
+      "last_loss_root_cause": "Candle body too narrow (19%). Lacked institutional momentum and reversed into chop (-0.00020).",
       "loss_causes": [
         "AI DEFENSE ACTIVATED: Enforced position bounds (pos >= 0.38) and consecutive loss cooldown.",
-        "AI DEFENSE ACTIVATED: In BEARISH trends, require verified support floor bounce (lower wick >= 18%) before taking CALL."
+        "AI DEFENSE ACTIVATED: In BEARISH trends, require verified support floor bounce (lower wick >= 18%) before taking CALL.",
+        "AI DEFENSE ACTIVATED: Require minimum body ratio or clean rejection pin-bar to filter low-liquidity traps."
       ],
-      "learned_at": "2026-10-21 04:58:58"
+      "learned_at": "2026-10-21 08:32:59"
     },
     "BULLISH_MOMENTUM_CONTINUATION": {
       "name": "BULLISH_MOMENTUM_CONTINUATION",
@@ -85,8 +86,8 @@
       "losses": 4,
       "draws": 0,
       "win_rate": 33.3,
-      "consecutive_losses": 1,
-      "status": "BLOCKED",
+      "consecutive_losses": 0,
+      "status": "ACTIVE",
       "last_feedback": "LOSS: Price reversed by 0.00020 against PUT entry (1.08466 -> 1.08486). Setup thesis invalidated. | DEFENSE: AI DEFENSE ACTIVATED: Elevated strictness and defensive cooldown on pattern 'BEARISH_MOMENTUM_CONTINUATION'.",
       "last_loss_root_cause": "Price reversed by 0.00020 against PUT entry (1.08466 -> 1.08486). Setup thesis invalidated.",
       "loss_causes": [
@@ -119,7 +120,7 @@
       "draws": 0,
       "win_rate": 33.3,
       "consecutive_losses": 0,
-      "status": "BLOCKED",
+      "status": "ACTIVE",
       "last_feedback": "WIN: Bearish confirmation: Price fell by -0.00020 (1.08518 -> 1.08498). Trend STRONG_BULLISH seller dominance prevailed.",
       "last_loss_root_cause": "PUT failed against dominant STRONG_BULLISH market (+0.00020). Buyers overpowered seller attempt.",
       "loss_causes": [
@@ -168,8 +169,8 @@
       "losses": 2,
       "draws": 0,
       "win_rate": 0.0,
-      "consecutive_losses": 2,
-      "status": "DEFENSIVE_COOLDOWN",
+      "consecutive_losses": 0,
+      "status": "ACTIVE",
       "last_feedback": "LOSS: CALL failed near Resistance ceiling (pos 0%). Overhead supply wall triggered downward reversal (-0.00020). | DEFENSE: AI DEFENSE ACTIVATED: Block CALL when within 20% of Resistance ceiling during sideways consolidation or when seller rejection wick >= 35%.",
       "last_loss_root_cause": "CALL failed near Resistance ceiling (pos 0%). Overhead supply wall triggered downward reversal (-0.00020).",
       "loss_causes": [
@@ -270,8 +271,8 @@
       "cause_code": "WEAK_MOMENTUM_BODY_TRAP",
       "description": "Candle body was thinner than 20% of total range, resulting in low-volume liquidity chop loss.",
       "actionable_rule": "BLOCK trades when candle body ratio < 20% and wick < 25% (chop/doji filter).",
-      "trigger_count": 4,
-      "last_detected": "2026-10-20 05:47:59"
+      "trigger_count": 5,
+      "last_detected": "2026-10-21 08:32:59"
     },
     "CALL_MOMENTUM_FAILURE": {
       "cause_code": "CALL_MOMENTUM_FAILURE",
@@ -334,6 +335,20 @@
     "DEFENSE_COUNTER_TREND_BULLISH_TRAP: AI DEFENSE ACTIVATED: In BULLISH trends, require verified resistance ceiling rejection (upper wick >= 18%) before taking PUT."
   ],
   "trades_history": [
+    {
+      "id": "98237454",
+      "timestamp": "08:32:00",
+      "direction": "CALL",
+      "entry_price": 1.08469,
+      "close_price": 1.08449,
+      "outcome": "LOSS",
+      "pnl": -100.0,
+      "confidence": 84.8,
+      "pattern_name": "BULLISH_STRONG_HAMMER_REJECTION",
+      "trend": "STRONG_BULLISH",
+      "outcome_reason": "Candle body too narrow (19%). Lacked institutional momentum and reversed into chop (-0.00020).",
+      "learning_insight": "AI DEFENSE ACTIVATED: Require minimum body ratio or clean rejection pin-bar to filter low-liquidity traps."
+    },
     {
       "id": "d03baaae",
       "timestamp": "06:36:00",
@@ -1719,25 +1734,11 @@
       "trend": "SIDEWAYS_CONSOLIDATION",
       "outcome_reason": "Bullish confirmation: Price rose by +0.00020 (1.08260 -> 1.08280). Trend SIDEWAYS_CONSOLIDATION buyer dominance prevailed.",
       "learning_insight": "Confirmed winning edge on RANGE_SUPPORT_BOUNCE: Trend-following CALL reinforced."
-    },
-    {
-      "id": "45f45f51",
-      "timestamp": "15:26:10",
-      "direction": "CALL",
-      "entry_price": 1.085,
-      "close_price": 1.0847,
-      "outcome": "LOSS",
-      "pnl": 0.0,
-      "confidence": 0.0,
-      "pattern_name": "EXPERIMENTAL_MOMENTUM_TEST",
-      "trend": "STRONG_BULLISH",
-      "outcome_reason": "CALL failed near Resistance ceiling (pos 15%). Overhead supply wall triggered downward reversal (-0.00030).",
-      "learning_insight": "AI DEFENSE ACTIVATED: Block CALL when within 25% of Resistance ceiling without verified breakout."
     }
   ],
   "persistence_status": {
     "protected": true,
     "dual_backup_active": true,
-    "last_sync": "2026-10-21 06:36:58"
+    "last_sync": "2026-10-21 08:32:59"
   }
 }

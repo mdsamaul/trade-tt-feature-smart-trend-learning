@@ -49,7 +49,7 @@ STRICTNESS_TIERS: Dict[int, StrictnessConfig] = {
     1: StrictnessConfig(
         level=1,
         name="Lenient / Exploration",
-        min_confidence=65.0,
+        min_confidence=60.0,
         min_wick_ratio=0.10,
         require_trend_alignment=False,
         description="Trades on standard momentum and basic S&R bounces."
@@ -57,32 +57,32 @@ STRICTNESS_TIERS: Dict[int, StrictnessConfig] = {
     2: StrictnessConfig(
         level=2,
         name="Balanced / Trend Following",
-        min_confidence=72.0,
-        min_wick_ratio=0.15,
+        min_confidence=68.0,
+        min_wick_ratio=0.12,
         require_trend_alignment=True,
         description="Follows dominant trend with confirmed momentum bodies."
     ),
     3: StrictnessConfig(
         level=3,
         name="Selective / High Probability",
-        min_confidence=78.0,
-        min_wick_ratio=0.18,
+        min_confidence=74.0,
+        min_wick_ratio=0.16,
         require_trend_alignment=True,
         description="Demands clean trend alignment and pullback rejections (Recommended)."
     ),
     4: StrictnessConfig(
         level=4,
         name="Defense / Institutional",
-        min_confidence=82.0,
-        min_wick_ratio=0.22,
+        min_confidence=80.0,
+        min_wick_ratio=0.20,
         require_trend_alignment=True,
         description="Requires strong confluence: Trend alignment + S&R confirmation."
     ),
     5: StrictnessConfig(
         level=5,
         name="Sniper / Ultra Strict",
-        min_confidence=86.0,
-        min_wick_ratio=0.28,
+        min_confidence=85.0,
+        min_wick_ratio=0.25,
         require_trend_alignment=True,
         description="Highest conviction only. Deep pullback rejection or major pin-bar."
     )
@@ -520,7 +520,7 @@ class StrategyLearner:
                 return True, 4.0, f"[AI Learned Edge]: Proven high-win-rate pattern '{pattern_key}' ({mem.win_rate:.0f}% WR, {mem.wins}W/{mem.losses}L). Permitted."
 
             if mem.status == "BLOCKED":
-                if mem.total_trades < 6 or (mem.total_trades >= 4 and mem.win_rate >= 60.0):
+                if mem.total_trades < 10 or (mem.total_trades >= 4 and mem.win_rate >= 50.0):
                     mem.status = "ACTIVE"
                     mem.consecutive_losses = 0
                 else:
@@ -674,13 +674,13 @@ class StrategyLearner:
             mem.learned_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
             # Update status based on statistical evidence and loss learning
-            if (total_decided >= 3 and mem.win_rate < 50.0) or (mem.consecutive_losses >= 3 and mem.win_rate < 70.0):
+            if (total_decided >= 8 and mem.win_rate < 45.0) or (mem.consecutive_losses >= 3 and mem.win_rate < 55.0):
                 mem.status = "BLOCKED"
                 logger.warning(f"🚫 [AI STRATEGY LEARNER] Pattern '{pattern_key}' BLOCKED from future trades ({mem.losses}L / {mem.wins}W, {mem.win_rate}% WR) to prevent repeating loss!")
-            elif mem.consecutive_losses >= 1:
+            elif mem.consecutive_losses >= 2 and mem.win_rate < 70.0:
                 mem.status = "DEFENSIVE_COOLDOWN"
                 logger.warning(f"🛡️ [AI STRATEGY LEARNER] Pattern '{pattern_key}' entered DEFENSIVE COOLDOWN after {mem.consecutive_losses} loss(es). Strictness raised to prevent back-to-back loss.")
-            elif total_decided >= 2 and mem.win_rate >= 75.0:
+            elif total_decided >= 2 and mem.win_rate >= 70.0:
                 mem.status = "BOOSTED"
                 logger.info(f"⭐ [AI STRATEGY LEARNER] Pattern '{pattern_key}' reinforced & BOOSTED ({mem.win_rate}% WR).")
             else:
@@ -1602,10 +1602,10 @@ You MUST respond strictly in valid JSON format matching this schema:
         if pos <= 0.25:
             if is_bullish_trend:
                 # In Bullish trend near highs: this is natural upward momentum continuation
-                if c_color == "GREEN" and body_ratio >= 0.24 and upper_wick <= 0.22:
-                    up_score += 14.0
+                if c_color == "GREEN" and body_ratio >= 0.20:
+                    up_score += 12.0
                     up_confluences.append("Bullish Trend Highs Expansion")
-                elif upper_wick >= 0.25:
+                elif upper_wick >= 0.35:
                     up_score -= 8.0
             elif trend == "SIDEWAYS_CONSOLIDATION":
                 # In sideways range, look for ceiling wall rejection (PUT)
@@ -1619,10 +1619,10 @@ You MUST respond strictly in valid JSON format matching this schema:
         elif pos >= 0.75:
             if is_bearish_trend:
                 # In Bearish trend near lows: this is natural downward momentum continuation
-                if c_color == "RED" and body_ratio >= 0.24 and lower_wick <= 0.22:
-                    down_score += 14.0
+                if c_color == "RED" and body_ratio >= 0.20:
+                    down_score += 12.0
                     down_confluences.append("Bearish Trend Lows Expansion")
-                elif lower_wick >= 0.25:
+                elif lower_wick >= 0.35:
                     down_score -= 8.0
             elif trend == "SIDEWAYS_CONSOLIDATION":
                 # In sideways range, look for floor bounce (CALL)
@@ -1642,12 +1642,12 @@ You MUST respond strictly in valid JSON format matching this schema:
                 down_score += 12.0
                 down_confluences.append("Mid-Channel Bearish Momentum")
 
-        # 5. Streak Climax Exhaustion Protection (Only penalize hyper-extended 6+ streaks)
-        if green_streak >= 6:
-            penalty = (green_streak - 5) * 8.0
+        # 5. Streak Climax Exhaustion Protection (Only penalize hyper-extended 8+ streaks)
+        if green_streak >= 8:
+            penalty = min(10.0, (green_streak - 7) * 3.0)
             up_score -= penalty
-        if red_streak >= 6:
-            penalty = (red_streak - 5) * 8.0
+        if red_streak >= 8:
+            penalty = min(10.0, (red_streak - 7) * 3.0)
             down_score -= penalty
 
         # 6. Clamp Probabilities to Valid Range [25.0, 96.0]
@@ -1916,7 +1916,7 @@ class TradingSessionManager:
         self.rolling_window_size = int(os.getenv("ROLLING_WINDOW_SIZE", str(rolling_window_size)))
         self.target_win_rate = float(os.getenv("TARGET_ROLLING_WIN_RATE", str(target_win_rate)))
 
-        env_strict = int(os.getenv("DEFAULT_STRICTNESS", "3"))
+        env_strict = int(os.getenv("DEFAULT_STRICTNESS", "2"))
         self.current_strictness = max(1, min(5, env_strict))
         self.auto_optimize = True
 
@@ -2102,9 +2102,8 @@ class TradingSessionManager:
                 self.balance -= trade.trade_amount
                 trade.pnl = -trade.trade_amount
                 self.losses += 1
-                # Enforce a 55-second cooldown after a loss to prevent back-to-back revenge trading
-                self.loss_cooldown_until = time.time() + 55.0
-                logger.info("🛡️ [CAPITAL DEFENSE] Enforced 55s cooldown after loss to allow erratic market spike to settle.")
+                self.loss_cooldown_until = 0.0
+                logger.info("🛡️ [CAPITAL DEFENSE] Loss logged. Cooldown kept at 0s so subsequent valid candle setups execute without delay.")
             else:
                 trade.pnl = 0.0
                 self.draws += 1
@@ -2276,16 +2275,17 @@ class TradingSessionManager:
         else:
             self.target_achieved = False
             if latest_outcome == "LOSS":
-                # Tighten strictness parameter to reject marginal setups, capping at Level 4 to avoid freezing
-                old_lvl = self.current_strictness
-                self.current_strictness = min(4, self.current_strictness + 1)
-                logger.info(
-                    f"[SELF-OPTIMIZER] Loss registered. Strictness tightened from Level {old_lvl} -> Level {self.current_strictness}."
-                )
-            elif latest_outcome == "WIN" and self.current_strictness > 3:
-                # After a successful trade, relax back to Level 3 to maintain active high-probability trading
-                self.current_strictness = 3
-                logger.info("[SELF-OPTIMIZER] Win registered. Strictness maintained at optimal Level 3.")
+                # Only tighten if 2 consecutive losses occurred and rolling accuracy is low
+                if self.losses >= 2 and len(self.rolling_outcomes) >= 3 and rolling_wr < 0.60:
+                    old_lvl = self.current_strictness
+                    self.current_strictness = min(3, self.current_strictness + 1)
+                    logger.info(
+                        f"[SELF-OPTIMIZER] 2 consecutive losses registered. Strictness tightened from Level {old_lvl} -> Level {self.current_strictness}."
+                    )
+            elif latest_outcome == "WIN" and self.current_strictness > 2:
+                # After a successful trade, maintain balanced Level 2 for active trading
+                self.current_strictness = 2
+                logger.info("[SELF-OPTIMIZER] Win registered. Strictness maintained at optimal Level 2.")
 
     def reset_session(self):
         """Resets the trading session to clean baseline."""
@@ -2299,7 +2299,7 @@ class TradingSessionManager:
             self.target_achieved = False
             self.active_trade = None
             self.trade_history.clear()
-            self.current_strictness = int(os.getenv("DEFAULT_STRICTNESS", "3"))
+            self.current_strictness = int(os.getenv("DEFAULT_STRICTNESS", "2"))
             logger.info("Session reset to initial demo parameters. AI Strategy Learner permanent memory and learned loss guardrails remain 100% preserved.")
 
 
