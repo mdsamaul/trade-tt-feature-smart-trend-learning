@@ -479,50 +479,49 @@ class StrategyLearner:
                 return False, -30.0, "[AI Learned Defense]: Blocked PUT on GREEN candle without strong upper rejection wick >= 25%."
 
             # Rule 3: Active Learned Anti-Pattern Interception
-            # 3A. Resistance Ceiling Protection (Do NOT buy CALL directly into ceiling supply zone without confirmed breakout)
-            if direction == "CALL" and pos_ratio <= 0.22:
-                return False, -30.0, f"[AI Learned Defense]: Blocked CALL near Resistance ceiling (pos: {pos_ratio*100:.0f}%). High risk of overhead seller rejection. Wait for confirmed breakout or pullback."
+            # 3A. Resistance Ceiling Protection:
+            # ONLY in SIDEWAYS ranges is the ceiling a rejection wall. In a BULLISH trend, new highs represent momentum!
+            if direction == "CALL" and pos_ratio <= 0.15 and trend == "SIDEWAYS_CONSOLIDATION":
+                return False, -25.0, f"[AI Learned Defense]: Blocked CALL near range ceiling (pos: {pos_ratio*100:.0f}%). Awaiting pullback or confirmed breakout."
 
-            # 3B. Support Floor Protection (Do NOT sell PUT directly into floor buyer demand zone without confirmed breakdown)
-            if direction == "PUT" and pos_ratio >= 0.78:
-                return False, -30.0, f"[AI Learned Defense]: Blocked PUT near Support floor (pos: {pos_ratio*100:.0f}%). High risk of floor buyer bounce. Wait for confirmed breakdown or rally."
+            # 3B. Support Floor Protection:
+            # ONLY in SIDEWAYS ranges is the floor a buyer bounce wall. In a BEARISH trend, new lows represent momentum!
+            if direction == "PUT" and pos_ratio >= 0.85 and trend == "SIDEWAYS_CONSOLIDATION":
+                return False, -25.0, f"[AI Learned Defense]: Blocked PUT near range floor (pos: {pos_ratio*100:.0f}%). Awaiting rally or confirmed breakdown."
 
             # 3C. Extended Consecutive Streak Exhaustion Protection
-            # In 1M binary options, 4 consecutive candles in one direction has high exhaustion reversal probability.
-            if streak >= 4 and body_ratio < 0.40:
-                return False, -25.0, f"[AI Learned Defense]: Blocked trade after {streak} consecutive {candle_color} candles. Climax exhaustion retracement trap."
+            # Only block hyper-extended streaks (6+ candles) with small momentum
+            if streak >= 6 and body_ratio < 0.30:
+                return False, -25.0, f"[AI Learned Defense]: Blocked trade after {streak} consecutive {candle_color} candles. Hyper-extended streak."
 
             # 3D. Opposing Rejection Wick Barrier Protection
-            # If opposing wick >= 20%, the opposing side (sellers on CALL, buyers on PUT) pushed price down/up before close!
-            if opposing_wick_ratio >= 0.20:
+            # Only block if opposing wick is substantial (>= 38%) and forms a true pin-bar overpowering body
+            if opposing_wick_ratio >= 0.38 and opposing_wick_ratio > (body_ratio * 1.3):
                 rejection_type = "overhead sellers" if direction == "CALL" else "support buyers"
                 return False, -25.0, f"[AI Learned Defense]: Blocked trade: {opposing_wick_ratio*100:.0f}% opposing rejection wick indicates {rejection_type} rejected continuation."
 
             # 3E. Weak Momentum Body Trap Filter (Indecision chop / micro-bodies)
-            if body_ratio < 0.20 and wick_ratio < 0.25:
+            if body_ratio < 0.16 and wick_ratio < 0.20:
                 return False, -20.0, f"[AI Learned Defense]: Flat micro-body candle ({body_ratio*100:.0f}% body). Low-liquidity chop."
 
-            # Rule 4: Setup Pattern Memory Status & Immediate Defensive Cooldown
+            # Rule 4: Setup Pattern Memory Status & Intelligent Edge Preservation
             mem = self.memory.get(pattern_key)
             if not mem:
                 return True, 0.0, "New setup pattern. Permitted under standard statistical conditions."
 
+            # Proven high-win-rate edge preservation: If pattern has >= 70% win rate with >= 4 trades, ALWAYS permit!
+            if mem.total_trades >= 4 and mem.win_rate >= 70.0:
+                return True, 4.0, f"[AI Learned Edge]: Proven high-win-rate pattern '{pattern_key}' ({mem.win_rate:.0f}% WR, {mem.wins}W/{mem.losses}L). Permitted."
+
             if mem.status == "BLOCKED":
-                # If sample size is small (< 6 trades) or win rate >= 70%: unblock to defensive cooldown rather than permanent lock
-                if mem.total_trades < 6 or (mem.total_trades >= 4 and mem.win_rate >= 70.0):
-                    mem.status = "DEFENSIVE_COOLDOWN"
+                if mem.total_trades < 6 or (mem.total_trades >= 4 and mem.win_rate >= 60.0):
+                    mem.status = "ACTIVE"
                     mem.consecutive_losses = 0
                 else:
                     return False, -30.0, f"[AI Self-Learned Protection]: Pattern '{pattern_key}' learned to be high-loss ({mem.losses}L / {mem.wins}W, Win rate: {mem.win_rate:.0f}%). BLOCKED to prevent repeating loss."
 
-            if mem.status == "DEFENSIVE_COOLDOWN" or mem.consecutive_losses >= 1:
-                # If 2 consecutive losses on this pattern: enforce pause for capital defense
-                if mem.consecutive_losses >= 2:
-                    return False, -25.0, f"[AI Defensive Shield]: Pattern '{pattern_key}' recently took 2 consecutive losses. Paused to prevent repeat revenge losses."
-
-                # If 1 recent loss: require strict confirmation (>= 32% absorption/rejection wick OR solid body >= 35% with clean alignment)
-                if wick_ratio < 0.32 and (body_ratio < 0.35 or opposing_wick_ratio >= 0.15):
-                    return False, -20.0, f"[AI Defensive Shield]: Pattern '{pattern_key}' recently lost a trade. Paused on marginal setup ({mem.last_loss_root_cause or 'loss cooldown'}) to prevent back-to-back loss."
+            if mem.consecutive_losses >= 3:
+                return False, -25.0, f"[AI Defensive Shield]: Pattern '{pattern_key}' recently took 3 consecutive losses. Paused for review."
 
             if mem.status == "BOOSTED":
                 return True, 4.0, f"[AI Learned Edge]: High-win-rate pattern '{pattern_key}' ({mem.win_rate:.0f}% WR). Boosted with +4% confidence."
@@ -1530,19 +1529,19 @@ You MUST respond strictly in valid JSON format matching this schema:
             if body_ratio >= 0.35:
                 up_confluences.append(f"Solid Green Expansion ({body_ratio*100:.0f}% body)")
 
-            # Overhead Seller Wick: if sellers pushed down from highs
-            if upper_wick >= 0.18:
-                up_score -= upper_wick * 40.0
+            # Overhead Seller Wick: only penalize if it's a true heavy rejection tail (> 35%)
+            if upper_wick > 0.35:
+                up_score -= 15.0
                 if trend == "SIDEWAYS_CONSOLIDATION":
-                    down_score += upper_wick * 30.0
+                    down_score += 20.0
                     down_confluences.append(f"Upper Seller Rejection Wick ({upper_wick*100:.0f}%)")
-            elif upper_wick <= 0.12 and body_ratio >= 0.28:
+            elif upper_wick <= 0.22 and body_ratio >= 0.28:
                 up_score += 8.0
                 up_confluences.append("Clean Bullish Close near Highs")
 
             # Lower Buyer Hammer Wick: buyers absorbed lows
-            if lower_wick >= 0.20 and not is_bearish_trend:
-                up_score += lower_wick * 30.0
+            if lower_wick >= 0.18 and not is_bearish_trend:
+                up_score += 10.0
                 up_confluences.append(f"Bullish Hammer Absorption Wick ({lower_wick*100:.0f}%)")
 
         elif c_color == "RED":
@@ -1553,19 +1552,19 @@ You MUST respond strictly in valid JSON format matching this schema:
             if body_ratio >= 0.35:
                 down_confluences.append(f"Solid Red Expansion ({body_ratio*100:.0f}% body)")
 
-            # Lower Buyer Wick: buyers defended lows
-            if lower_wick >= 0.18:
-                down_score -= lower_wick * 40.0
+            # Lower Buyer Wick: only penalize if it's a true heavy bounce tail (> 35%)
+            if lower_wick > 0.35:
+                down_score -= 15.0
                 if trend == "SIDEWAYS_CONSOLIDATION":
-                    up_score += lower_wick * 30.0
+                    up_score += 20.0
                     up_confluences.append(f"Lower Buyer Defense Wick ({lower_wick*100:.0f}%)")
-            elif lower_wick <= 0.12 and body_ratio >= 0.28:
+            elif lower_wick <= 0.22 and body_ratio >= 0.28:
                 down_score += 8.0
                 down_confluences.append("Clean Bearish Close near Lows")
 
             # Upper Seller Star Wick: sellers knocked down rallies
-            if upper_wick >= 0.20 and not is_bullish_trend:
-                down_score += upper_wick * 30.0
+            if upper_wick >= 0.18 and not is_bullish_trend:
+                down_score += 10.0
                 down_confluences.append(f"Bearish Shooting Star Wick ({upper_wick*100:.0f}%)")
 
         # 3. Two-Candle Reversal & Engulfing Confluence
@@ -1595,60 +1594,54 @@ You MUST respond strictly in valid JSON format matching this schema:
 
         # 4. Support & Resistance Channel Position (pos: 0.0=Resistance Ceiling, 1.0=Support Floor)
         if pos <= 0.25:
-            # Resistance Ceiling Zone
             if is_bullish_trend:
-                # In Bullish trend near ceiling: Only allow CALL if candle cleanly broke out with strong body
-                if c_color == "GREEN" and body_ratio >= 0.40 and upper_wick <= 0.12:
-                    up_score += 12.0
-                    up_confluences.append("Confirmed Resistance Breakout Expansion")
-                else:
-                    up_score -= 18.0  # Don't buy directly into ceiling wall without breakout
+                # In Bullish trend near highs: this is natural upward momentum continuation
+                if c_color == "GREEN" and body_ratio >= 0.24 and upper_wick <= 0.22:
+                    up_score += 14.0
+                    up_confluences.append("Bullish Trend Highs Expansion")
+                elif upper_wick >= 0.25:
+                    up_score -= 8.0
             elif trend == "SIDEWAYS_CONSOLIDATION":
                 # In sideways range, look for ceiling wall rejection (PUT)
-                if upper_wick >= 0.25 or (c_color == "RED" and prev_color == "GREEN"):
-                    down_score += 18.0 + (upper_wick * 20.0)
-                    up_score -= 25.0
+                if upper_wick >= 0.22 or (c_color == "RED" and prev_color == "GREEN"):
+                    down_score += 16.0 + (upper_wick * 20.0)
+                    up_score -= 20.0
                     down_confluences.append(f"Range Ceiling Wall Rejection (pos {pos*100:.0f}%)")
                 else:
-                    up_score -= 18.0
-            else:
-                up_score -= 20.0
+                    up_score -= 12.0
 
         elif pos >= 0.75:
-            # Support Floor Zone
             if is_bearish_trend:
-                # In Bearish trend near floor: Only allow PUT if candle cleanly broke down with strong body
-                if c_color == "RED" and body_ratio >= 0.40 and lower_wick <= 0.12:
-                    down_score += 12.0
-                    down_confluences.append("Confirmed Support Breakdown Expansion")
-                else:
-                    down_score -= 18.0  # Don't sell directly into floor without breakdown
+                # In Bearish trend near lows: this is natural downward momentum continuation
+                if c_color == "RED" and body_ratio >= 0.24 and lower_wick <= 0.22:
+                    down_score += 14.0
+                    down_confluences.append("Bearish Trend Lows Expansion")
+                elif lower_wick >= 0.25:
+                    down_score -= 8.0
             elif trend == "SIDEWAYS_CONSOLIDATION":
                 # In sideways range, look for floor bounce (CALL)
-                if lower_wick >= 0.25 or (c_color == "GREEN" and prev_color == "RED"):
-                    up_score += 18.0 + (lower_wick * 20.0)
-                    down_score -= 25.0
+                if lower_wick >= 0.22 or (c_color == "GREEN" and prev_color == "RED"):
+                    up_score += 16.0 + (lower_wick * 20.0)
+                    down_score -= 20.0
                     up_confluences.append(f"Range Floor Bounce Defense (pos {pos*100:.0f}%)")
                 else:
-                    down_score -= 18.0
-            else:
-                down_score -= 20.0
+                    down_score -= 12.0
 
         else:
             # Mid-Channel Open Space (Healthy continuation area)
-            if c_color == "GREEN" and body_ratio >= 0.28 and not is_bearish_trend:
-                up_score += 10.0
+            if c_color == "GREEN" and body_ratio >= 0.25 and not is_bearish_trend:
+                up_score += 12.0
                 up_confluences.append("Mid-Channel Bullish Momentum")
-            elif c_color == "RED" and body_ratio >= 0.28 and not is_bullish_trend:
-                down_score += 10.0
+            elif c_color == "RED" and body_ratio >= 0.25 and not is_bullish_trend:
+                down_score += 12.0
                 down_confluences.append("Mid-Channel Bearish Momentum")
 
-        # 5. Streak Climax Exhaustion Protection
-        if green_streak >= 4:
-            penalty = (green_streak - 3) * 10.0
+        # 5. Streak Climax Exhaustion Protection (Only penalize hyper-extended 6+ streaks)
+        if green_streak >= 6:
+            penalty = (green_streak - 5) * 8.0
             up_score -= penalty
-        if red_streak >= 4:
-            penalty = (red_streak - 3) * 10.0
+        if red_streak >= 6:
+            penalty = (red_streak - 5) * 8.0
             down_score -= penalty
 
         # 6. Clamp Probabilities to Valid Range [25.0, 96.0]
