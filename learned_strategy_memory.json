@@ -30,20 +30,20 @@
     },
     "BULLISH_STRONG_HAMMER_REJECTION": {
       "name": "BULLISH_STRONG_HAMMER_REJECTION",
-      "total_trades": 42,
-      "wins": 37,
-      "losses": 5,
+      "total_trades": 45,
+      "wins": 39,
+      "losses": 6,
       "draws": 0,
-      "win_rate": 88.1,
+      "win_rate": 86.7,
       "consecutive_losses": 0,
       "status": "BOOSTED",
-      "last_feedback": "WIN: Bullish confirmation: Price rose by +0.00020 (1.08621 -> 1.08641). Trend STRONG_BEARISH buyer dominance prevailed.",
+      "last_feedback": "WIN: Bullish confirmation: Price rose by +0.00020 (1.08284 -> 1.08304). Trend SIDEWAYS_CONSOLIDATION buyer dominance prevailed.",
       "last_loss_root_cause": "CALL failed against dominant STRONG_BEARISH market (-0.00020). Sellers overpowered buyer attempt.",
       "loss_causes": [
         "AI DEFENSE ACTIVATED: Enforced position bounds (pos >= 0.38) and consecutive loss cooldown.",
         "AI DEFENSE ACTIVATED: In BEARISH trends, require verified support floor bounce (lower wick >= 18%) before taking CALL."
       ],
-      "learned_at": "2026-10-20 09:24:59"
+      "learned_at": "2026-10-21 04:32:59"
     },
     "BULLISH_MOMENTUM_CONTINUATION": {
       "name": "BULLISH_MOMENTUM_CONTINUATION",
@@ -63,19 +63,20 @@
     },
     "BEARISH_STRONG_STAR_REJECTION": {
       "name": "BEARISH_STRONG_STAR_REJECTION",
-      "total_trades": 3,
-      "wins": 1,
-      "losses": 2,
+      "total_trades": 9,
+      "wins": 5,
+      "losses": 4,
       "draws": 0,
-      "win_rate": 33.3,
+      "win_rate": 55.6,
       "consecutive_losses": 0,
-      "status": "DEFENSIVE_COOLDOWN",
-      "last_feedback": "LOSS: Price reversed by 0.00020 against PUT entry (1.08577 -> 1.08597). Setup thesis invalidated. | DEFENSE: AI DEFENSE ACTIVATED: Elevated strictness and defensive cooldown on pattern 'BEARISH_STRONG_STAR_REJECTION'.",
-      "last_loss_root_cause": "Price reversed by 0.00020 against PUT entry (1.08577 -> 1.08597). Setup thesis invalidated.",
+      "status": "ACTIVE",
+      "last_feedback": "WIN: Bearish confirmation: Price fell by -0.00020 (1.08269 -> 1.08249). Trend STRONG_BEARISH seller dominance prevailed.",
+      "last_loss_root_cause": "PUT failed against dominant STRONG_BULLISH market (+0.00020). Buyers overpowered seller attempt.",
       "loss_causes": [
-        "AI DEFENSE ACTIVATED: Elevated strictness and defensive cooldown on pattern 'BEARISH_STRONG_STAR_REJECTION'."
+        "AI DEFENSE ACTIVATED: Elevated strictness and defensive cooldown on pattern 'BEARISH_STRONG_STAR_REJECTION'.",
+        "AI DEFENSE ACTIVATED: In BULLISH trends, require verified resistance ceiling rejection (upper wick >= 18%) before taking PUT."
       ],
-      "learned_at": "2026-10-19 09:42:57"
+      "learned_at": "2026-10-21 04:51:55"
     },
     "BEARISH_MOMENTUM_CONTINUATION": {
       "name": "BEARISH_MOMENTUM_CONTINUATION",
@@ -112,37 +113,37 @@
     },
     "RANGE_RESISTANCE_REJECTION": {
       "name": "RANGE_RESISTANCE_REJECTION",
-      "total_trades": 5,
-      "wins": 1,
+      "total_trades": 6,
+      "wins": 2,
       "losses": 4,
       "draws": 0,
-      "win_rate": 20.0,
+      "win_rate": 33.3,
       "consecutive_losses": 0,
-      "status": "DEFENSIVE_COOLDOWN",
-      "last_feedback": "LOSS: PUT failed against dominant STRONG_BULLISH market (+0.00020). Buyers overpowered seller attempt. | DEFENSE: AI DEFENSE ACTIVATED: In BULLISH trends, require verified resistance ceiling rejection (upper wick >= 18%) before taking PUT.",
+      "status": "BLOCKED",
+      "last_feedback": "WIN: Bearish confirmation: Price fell by -0.00020 (1.08518 -> 1.08498). Trend STRONG_BULLISH seller dominance prevailed.",
       "last_loss_root_cause": "PUT failed against dominant STRONG_BULLISH market (+0.00020). Buyers overpowered seller attempt.",
       "loss_causes": [
         "AI DEFENSE ACTIVATED: Elevated strictness and defensive cooldown on pattern 'RANGE_RESISTANCE_REJECTION'.",
         "AI DEFENSE ACTIVATED: In BULLISH trends, require verified resistance ceiling rejection (upper wick >= 18%) before taking PUT."
       ],
-      "learned_at": "2026-10-20 08:44:01"
+      "learned_at": "2026-10-21 04:52:55"
     },
     "SUPPORT_FLOOR_BOUNCE": {
       "name": "SUPPORT_FLOOR_BOUNCE",
-      "total_trades": 10,
-      "wins": 5,
+      "total_trades": 12,
+      "wins": 7,
       "losses": 5,
       "draws": 0,
-      "win_rate": 50.0,
-      "consecutive_losses": 1,
-      "status": "DEFENSIVE_COOLDOWN",
-      "last_feedback": "LOSS: CALL failed against dominant STRONG_BEARISH market (-0.00020). Sellers overpowered buyer attempt. | DEFENSE: AI DEFENSE ACTIVATED: In BEARISH trends, require verified support floor bounce (lower wick >= 18%) before taking CALL.",
+      "win_rate": 58.3,
+      "consecutive_losses": 0,
+      "status": "ACTIVE",
+      "last_feedback": "WIN: Bullish confirmation: Price rose by +0.00020 (1.08260 -> 1.08280). Trend STRONG_BULLISH buyer dominance prevailed.",
       "last_loss_root_cause": "CALL failed against dominant STRONG_BEARISH market (-0.00020). Sellers overpowered buyer attempt.",
       "loss_causes": [
         "AI RULE ENFORCED: Never buy CALL during BEARISH trends. UP -> CALL only, DOWN -> PUT only.",
         "AI DEFENSE ACTIVATED: In BEARISH trends, require verified support floor bounce (lower wick >= 18%) before taking CALL."
       ],
-      "learned_at": "2026-10-20 08:49:00"
+      "learned_at": "2026-10-21 04:48:59"
     },
     "RESISTANCE_CEILING_REVERSAL": {
       "name": "RESISTANCE_CEILING_REVERSAL",
@@ -192,6 +193,20 @@
         "AI RULE ENFORCED: Never buy CALL during BEARISH trends. UP -> CALL only, DOWN -> PUT only."
       ],
       "learned_at": "2026-10-20 06:20:59"
+    },
+    "BULLISH_CEILING_BREAKOUT": {
+      "name": "BULLISH_CEILING_BREAKOUT",
+      "total_trades": 3,
+      "wins": 3,
+      "losses": 0,
+      "draws": 0,
+      "win_rate": 100.0,
+      "consecutive_losses": 0,
+      "status": "BOOSTED",
+      "last_feedback": "WIN: Bullish confirmation: Price rose by +0.00020 (1.08632 -> 1.08652). Trend STRONG_BULLISH buyer dominance prevailed.",
+      "last_loss_root_cause": "",
+      "loss_causes": [],
+      "learned_at": "2026-10-21 04:17:59"
     }
   },
   "anti_patterns": {
@@ -248,15 +263,15 @@
       "cause_code": "COUNTER_TREND_BEARISH_TRAP",
       "description": "CALL failed against dominant STRONG_BEARISH market (-0.00020). Sellers overpowered buyer attempt.",
       "actionable_rule": "AI RULE ENFORCED: Never buy CALL during BEARISH trends. UP -> CALL only, DOWN -> PUT only.",
-      "trigger_count": 8,
-      "last_detected": "2026-10-20 08:49:00"
+      "trigger_count": 9,
+      "last_detected": "2026-10-21 04:04:55"
     },
     "COUNTER_TREND_BULLISH_TRAP": {
       "cause_code": "COUNTER_TREND_BULLISH_TRAP",
       "description": "PUT failed against dominant STRONG_BULLISH market (+0.00020). Buyers overpowered seller attempt.",
       "actionable_rule": "AI RULE ENFORCED: Never buy PUT during BULLISH trends. UP -> CALL only, DOWN -> PUT only.",
-      "trigger_count": 2,
-      "last_detected": "2026-10-20 08:44:01"
+      "trigger_count": 4,
+      "last_detected": "2026-10-21 04:23:59"
     }
   },
   "learned_rules": [
@@ -291,6 +306,216 @@
     "DEFENSE_COUNTER_TREND_BULLISH_TRAP: AI DEFENSE ACTIVATED: In BULLISH trends, require verified resistance ceiling rejection (upper wick >= 18%) before taking PUT."
   ],
   "trades_history": [
+    {
+      "id": "a5d3e822",
+      "timestamp": "04:51:56",
+      "direction": "PUT",
+      "entry_price": 1.08518,
+      "close_price": 1.08498,
+      "outcome": "WIN",
+      "pnl": 85.0,
+      "confidence": 89.7,
+      "pattern_name": "RANGE_RESISTANCE_REJECTION",
+      "trend": "STRONG_BULLISH",
+      "outcome_reason": "Bearish confirmation: Price fell by -0.00020 (1.08518 -> 1.08498). Trend STRONG_BULLISH seller dominance prevailed.",
+      "learning_insight": "Confirmed winning edge on RANGE_RESISTANCE_REJECTION: Trend-following PUT reinforced."
+    },
+    {
+      "id": "263c678b",
+      "timestamp": "04:50:56",
+      "direction": "PUT",
+      "entry_price": 1.08269,
+      "close_price": 1.08249,
+      "outcome": "WIN",
+      "pnl": 85.0,
+      "confidence": 96.0,
+      "pattern_name": "BEARISH_STRONG_STAR_REJECTION",
+      "trend": "STRONG_BEARISH",
+      "outcome_reason": "Bearish confirmation: Price fell by -0.00020 (1.08269 -> 1.08249). Trend STRONG_BEARISH seller dominance prevailed.",
+      "learning_insight": "Confirmed winning edge on BEARISH_STRONG_STAR_REJECTION: Trend-following PUT reinforced."
+    },
+    {
+      "id": "777b5563",
+      "timestamp": "04:48:00",
+      "direction": "CALL",
+      "entry_price": 1.0826,
+      "close_price": 1.0828,
+      "outcome": "WIN",
+      "pnl": 85.0,
+      "confidence": 78.9,
+      "pattern_name": "SUPPORT_FLOOR_BOUNCE",
+      "trend": "STRONG_BULLISH",
+      "outcome_reason": "Bullish confirmation: Price rose by +0.00020 (1.08260 -> 1.08280). Trend STRONG_BULLISH buyer dominance prevailed.",
+      "learning_insight": "Confirmed winning edge on SUPPORT_FLOOR_BOUNCE: Trend-following CALL reinforced."
+    },
+    {
+      "id": "1db7d594",
+      "timestamp": "04:46:00",
+      "direction": "CALL",
+      "entry_price": 1.0826,
+      "close_price": 1.0828,
+      "outcome": "WIN",
+      "pnl": 85.0,
+      "confidence": 78.9,
+      "pattern_name": "SUPPORT_FLOOR_BOUNCE",
+      "trend": "STRONG_BULLISH",
+      "outcome_reason": "Bullish confirmation: Price rose by +0.00020 (1.08260 -> 1.08280). Trend STRONG_BULLISH buyer dominance prevailed.",
+      "learning_insight": "Confirmed winning edge on SUPPORT_FLOOR_BOUNCE: Trend-following CALL reinforced."
+    },
+    {
+      "id": "fd304161",
+      "timestamp": "04:32:00",
+      "direction": "CALL",
+      "entry_price": 1.08284,
+      "close_price": 1.08304,
+      "outcome": "WIN",
+      "pnl": 85.0,
+      "confidence": 96.0,
+      "pattern_name": "BULLISH_STRONG_HAMMER_REJECTION",
+      "trend": "SIDEWAYS_CONSOLIDATION",
+      "outcome_reason": "Bullish confirmation: Price rose by +0.00020 (1.08284 -> 1.08304). Trend SIDEWAYS_CONSOLIDATION buyer dominance prevailed.",
+      "learning_insight": "Confirmed winning edge on BULLISH_STRONG_HAMMER_REJECTION: Trend-following CALL reinforced."
+    },
+    {
+      "id": "8a7af4fd",
+      "timestamp": "04:30:00",
+      "direction": "CALL",
+      "entry_price": 1.08284,
+      "close_price": 1.08304,
+      "outcome": "WIN",
+      "pnl": 85.0,
+      "confidence": 95.3,
+      "pattern_name": "BULLISH_STRONG_HAMMER_REJECTION",
+      "trend": "SIDEWAYS_CONSOLIDATION",
+      "outcome_reason": "Bullish confirmation: Price rose by +0.00020 (1.08284 -> 1.08304). Trend SIDEWAYS_CONSOLIDATION buyer dominance prevailed.",
+      "learning_insight": "Confirmed winning edge on BULLISH_STRONG_HAMMER_REJECTION: Trend-following CALL reinforced."
+    },
+    {
+      "id": "77768986",
+      "timestamp": "04:23:00",
+      "direction": "PUT",
+      "entry_price": 1.08564,
+      "close_price": 1.08584,
+      "outcome": "LOSS",
+      "pnl": -100.0,
+      "confidence": 96.0,
+      "pattern_name": "BEARISH_STRONG_STAR_REJECTION",
+      "trend": "STRONG_BULLISH",
+      "outcome_reason": "PUT failed against dominant STRONG_BULLISH market (+0.00020). Buyers overpowered seller attempt.",
+      "learning_insight": "AI DEFENSE ACTIVATED: In BULLISH trends, require verified resistance ceiling rejection (upper wick >= 18%) before taking PUT."
+    },
+    {
+      "id": "37ffadcb",
+      "timestamp": "04:22:00",
+      "direction": "PUT",
+      "entry_price": 1.08565,
+      "close_price": 1.08545,
+      "outcome": "WIN",
+      "pnl": 85.0,
+      "confidence": 96.0,
+      "pattern_name": "BEARISH_STRONG_STAR_REJECTION",
+      "trend": "STRONG_BULLISH",
+      "outcome_reason": "Bearish confirmation: Price fell by -0.00020 (1.08565 -> 1.08545). Trend STRONG_BULLISH seller dominance prevailed.",
+      "learning_insight": "Confirmed winning edge on BEARISH_STRONG_STAR_REJECTION: Trend-following PUT reinforced."
+    },
+    {
+      "id": "b60a2681",
+      "timestamp": "04:21:00",
+      "direction": "PUT",
+      "entry_price": 1.08565,
+      "close_price": 1.08585,
+      "outcome": "LOSS",
+      "pnl": -100.0,
+      "confidence": 96.0,
+      "pattern_name": "BEARISH_STRONG_STAR_REJECTION",
+      "trend": "STRONG_BULLISH",
+      "outcome_reason": "PUT failed against dominant STRONG_BULLISH market (+0.00020). Buyers overpowered seller attempt.",
+      "learning_insight": "AI DEFENSE ACTIVATED: In BULLISH trends, require verified resistance ceiling rejection (upper wick >= 18%) before taking PUT."
+    },
+    {
+      "id": "4a306b94",
+      "timestamp": "04:19:00",
+      "direction": "PUT",
+      "entry_price": 1.08565,
+      "close_price": 1.08545,
+      "outcome": "WIN",
+      "pnl": 85.0,
+      "confidence": 96.0,
+      "pattern_name": "BEARISH_STRONG_STAR_REJECTION",
+      "trend": "STRONG_BULLISH",
+      "outcome_reason": "Bearish confirmation: Price fell by -0.00020 (1.08565 -> 1.08545). Trend STRONG_BULLISH seller dominance prevailed.",
+      "learning_insight": "Confirmed winning edge on BEARISH_STRONG_STAR_REJECTION: Trend-following PUT reinforced."
+    },
+    {
+      "id": "a9757345",
+      "timestamp": "04:18:00",
+      "direction": "PUT",
+      "entry_price": 1.08565,
+      "close_price": 1.08545,
+      "outcome": "WIN",
+      "pnl": 85.0,
+      "confidence": 96.0,
+      "pattern_name": "BEARISH_STRONG_STAR_REJECTION",
+      "trend": "STRONG_BULLISH",
+      "outcome_reason": "Bearish confirmation: Price fell by -0.00020 (1.08565 -> 1.08545). Trend STRONG_BULLISH seller dominance prevailed.",
+      "learning_insight": "Confirmed winning edge on BEARISH_STRONG_STAR_REJECTION: Trend-following PUT reinforced."
+    },
+    {
+      "id": "cdc3960e",
+      "timestamp": "04:17:00",
+      "direction": "CALL",
+      "entry_price": 1.08632,
+      "close_price": 1.08652,
+      "outcome": "WIN",
+      "pnl": 85.0,
+      "confidence": 96.0,
+      "pattern_name": "BULLISH_CEILING_BREAKOUT",
+      "trend": "STRONG_BULLISH",
+      "outcome_reason": "Bullish confirmation: Price rose by +0.00020 (1.08632 -> 1.08652). Trend STRONG_BULLISH buyer dominance prevailed.",
+      "learning_insight": "Confirmed winning edge on BULLISH_CEILING_BREAKOUT: Trend-following CALL reinforced."
+    },
+    {
+      "id": "f5e7be2e",
+      "timestamp": "04:16:00",
+      "direction": "CALL",
+      "entry_price": 1.08632,
+      "close_price": 1.08652,
+      "outcome": "WIN",
+      "pnl": 85.0,
+      "confidence": 96.0,
+      "pattern_name": "BULLISH_CEILING_BREAKOUT",
+      "trend": "SIDEWAYS_CONSOLIDATION",
+      "outcome_reason": "Bullish confirmation: Price rose by +0.00020 (1.08632 -> 1.08652). Trend SIDEWAYS_CONSOLIDATION buyer dominance prevailed.",
+      "learning_insight": "Confirmed winning edge on BULLISH_CEILING_BREAKOUT: Trend-following CALL reinforced."
+    },
+    {
+      "id": "bed34d55",
+      "timestamp": "04:15:00",
+      "direction": "CALL",
+      "entry_price": 1.08632,
+      "close_price": 1.08652,
+      "outcome": "WIN",
+      "pnl": 85.0,
+      "confidence": 96.0,
+      "pattern_name": "BULLISH_CEILING_BREAKOUT",
+      "trend": "SIDEWAYS_CONSOLIDATION",
+      "outcome_reason": "Bullish confirmation: Price rose by +0.00020 (1.08632 -> 1.08652). Trend SIDEWAYS_CONSOLIDATION buyer dominance prevailed.",
+      "learning_insight": "Confirmed winning edge on BULLISH_CEILING_BREAKOUT: Trend-following CALL reinforced."
+    },
+    {
+      "id": "502f26f9",
+      "timestamp": "04:03:56",
+      "direction": "CALL",
+      "entry_price": 1.08637,
+      "close_price": 1.08617,
+      "outcome": "LOSS",
+      "pnl": -100.0,
+      "confidence": 86.2,
+      "pattern_name": "BULLISH_STRONG_HAMMER_REJECTION",
+      "trend": "STRONG_BEARISH",
+      "outcome_reason": "CALL failed against dominant STRONG_BEARISH market (-0.00020). Sellers overpowered buyer attempt.",
+      "learning_insight": "AI DEFENSE ACTIVATED: In BEARISH trends, require verified support floor bounce (lower wick >= 18%) before taking CALL."
+    },
     {
       "id": "81fe3ba3",
       "timestamp": "09:24:01",
@@ -1303,6 +1528,6 @@
   "persistence_status": {
     "protected": true,
     "dual_backup_active": true,
-    "last_sync": "2026-10-20 09:24:59"
+    "last_sync": "2026-10-21 04:52:55"
   }
 }
