@@ -462,44 +462,44 @@ class StrategyLearner:
         Returns: (is_allowed, confidence_delta, rationale)
         """
         with self.lock:
-            # Rule 1: Bidirectional Candle Probability & Trend Alignment Guardrails
-            # Symmetrically allow counter-trend setups if price action shows strong rejection wick (>= 18%), reversal body (>= 35%), or key boundary position
-            if direction == "PUT" and trend == "STRONG_BULLISH" and wick_ratio < 0.18 and body_ratio < 0.35 and pos_ratio > 0.32:
-                return False, -30.0, f"[AI Trend Guardrail]: Blocked counter-trend PUT in STRONG_BULLISH market without institutional resistance rejection (wick < 18% and pos not at ceiling)."
+            # Rule 1: STRICT ZERO COUNTER-TREND MANDATE (UP -> CALL only, DOWN -> PUT only)
+            # Never trade against the dominant trend in binary options.
+            if direction == "PUT" and ("BULLISH" in trend):
+                return False, -50.0, f"[AI Strict Trend Rule]: Counter-trend PUT strictly blocked in {trend} market. UP market -> CALL only."
 
-            if direction == "CALL" and trend == "STRONG_BEARISH" and wick_ratio < 0.18 and body_ratio < 0.35 and pos_ratio < 0.68:
-                return False, -30.0, f"[AI Trend Guardrail]: Blocked counter-trend CALL in STRONG_BEARISH market without institutional support bounce (wick < 18% and pos not at floor)."
+            if direction == "CALL" and ("BEARISH" in trend):
+                return False, -50.0, f"[AI Strict Trend Rule]: Counter-trend CALL strictly blocked in {trend} market. DOWN market -> PUT only."
 
             # Rule 2: Candle Color Directional Alignment
-            # If entering in opposite direction of candle color, require a confirmed rejection tail (pin-bar / hammer / star)
-            if direction == "CALL" and candle_color == "RED" and wick_ratio < 0.18 and body_ratio > 0.40:
-                return False, -25.0, "[AI Learned Defense]: Blocked CALL on strong RED candle without lower absorption wick >= 18%."
+            # If entering in opposite direction of candle color, require a confirmed rejection tail (pin-bar / hammer / star >= 25%)
+            if direction == "CALL" and candle_color == "RED" and wick_ratio < 0.25:
+                return False, -30.0, "[AI Learned Defense]: Blocked CALL on RED candle without strong lower absorption wick >= 25%."
 
-            if direction == "PUT" and candle_color == "GREEN" and wick_ratio < 0.18 and body_ratio > 0.40:
-                return False, -25.0, "[AI Learned Defense]: Blocked PUT on strong GREEN candle without upper rejection wick >= 18%."
+            if direction == "PUT" and candle_color == "GREEN" and wick_ratio < 0.25:
+                return False, -30.0, "[AI Learned Defense]: Blocked PUT on GREEN candle without strong upper rejection wick >= 25%."
 
             # Rule 3: Active Learned Anti-Pattern Interception
-            # 3A. Resistance Ceiling Reversal Protection (Block CALL into ceiling supply zone)
-            if direction == "CALL" and pos_ratio <= 0.30 and (opposing_wick_ratio >= 0.18 or candle_color == "RED"):
-                return False, -25.0, f"[AI Learned Defense]: Blocked CALL near Resistance ceiling (pos: {pos_ratio*100:.0f}%) with ceiling sellers active (wick: {opposing_wick_ratio*100:.0f}%, candle: {candle_color}). Awaiting pullback or confirmed breakout."
+            # 3A. Resistance Ceiling Protection (Do NOT buy CALL directly into ceiling supply zone without confirmed breakout)
+            if direction == "CALL" and pos_ratio <= 0.22:
+                return False, -30.0, f"[AI Learned Defense]: Blocked CALL near Resistance ceiling (pos: {pos_ratio*100:.0f}%). High risk of overhead seller rejection. Wait for confirmed breakout or pullback."
 
-            # 3B. Support Floor Bounce Protection (Block PUT into floor buyer support zone)
-            if direction == "PUT" and pos_ratio >= 0.70 and (opposing_wick_ratio >= 0.18 or candle_color == "GREEN"):
-                return False, -25.0, f"[AI Learned Defense]: Blocked PUT near Support floor (pos: {pos_ratio*100:.0f}%) with floor buyers active (wick: {opposing_wick_ratio*100:.0f}%, candle: {candle_color}). Awaiting rally or confirmed breakdown."
+            # 3B. Support Floor Protection (Do NOT sell PUT directly into floor buyer demand zone without confirmed breakdown)
+            if direction == "PUT" and pos_ratio >= 0.78:
+                return False, -30.0, f"[AI Learned Defense]: Blocked PUT near Support floor (pos: {pos_ratio*100:.0f}%). High risk of floor buyer bounce. Wait for confirmed breakdown or rally."
 
             # 3C. Extended Consecutive Streak Exhaustion Protection
-            # In a strong trend, 3-5 candles is standard momentum. Only block if hyper-extended (streak >= 6).
-            if streak >= 6 and body_ratio < 0.25:
-                return False, -20.0, f"[AI Learned Defense]: Blocked trade after {streak} consecutive {candle_color} candles with shrinking body ({body_ratio*100:.0f}%). Climax exhaustion trap."
+            # In 1M binary options, 4 consecutive candles in one direction has high exhaustion reversal probability.
+            if streak >= 4 and body_ratio < 0.40:
+                return False, -25.0, f"[AI Learned Defense]: Blocked trade after {streak} consecutive {candle_color} candles. Climax exhaustion retracement trap."
 
             # 3D. Opposing Rejection Wick Barrier Protection
-            # Only block if opposing wick is substantial (>= 40%) AND significantly larger than body
-            if opposing_wick_ratio >= 0.40 and opposing_wick_ratio > (body_ratio * 1.4):
+            # If opposing wick >= 20%, the opposing side (sellers on CALL, buyers on PUT) pushed price down/up before close!
+            if opposing_wick_ratio >= 0.20:
                 rejection_type = "overhead sellers" if direction == "CALL" else "support buyers"
-                return False, -25.0, f"[AI Learned Defense]: Blocked trade due to {opposing_wick_ratio*100:.0f}% opposing rejection wick overpowering body ({body_ratio*100:.0f}%). {rejection_type.capitalize()} invalidate continuation."
+                return False, -25.0, f"[AI Learned Defense]: Blocked trade: {opposing_wick_ratio*100:.0f}% opposing rejection wick indicates {rejection_type} rejected continuation."
 
-            # 3E. Weak Momentum Body Trap Filter (True flat chop only)
-            if body_ratio < 0.12 and wick_ratio < 0.18:
+            # 3E. Weak Momentum Body Trap Filter (Indecision chop / micro-bodies)
+            if body_ratio < 0.20 and wick_ratio < 0.25:
                 return False, -20.0, f"[AI Learned Defense]: Flat micro-body candle ({body_ratio*100:.0f}% body). Low-liquidity chop."
 
             # Rule 4: Setup Pattern Memory Status & Immediate Defensive Cooldown
@@ -1495,23 +1495,26 @@ You MUST respond strictly in valid JSON format matching this schema:
         up_confluences: List[str] = []
         down_confluences: List[str] = []
 
-        # 1. Macro Trend Flow (Provides baseline bias, but doesn't forbid reversals)
+        # 1. Macro Trend Flow (Strict Trend-Following: Never trade counter-trend)
+        is_bullish_trend = trend in ["STRONG_BULLISH", "MILD_BULLISH"]
+        is_bearish_trend = trend in ["STRONG_BEARISH", "MILD_BEARISH"]
+
         if trend == "STRONG_BULLISH":
-            up_score += 6.0
-            down_score -= 4.0
-            up_confluences.append("Bullish Trend Baseline (+6%)")
+            up_score += 16.0
+            down_score = 25.0  # Hard lock: NEVER take PUT in a strong bull market
+            up_confluences.append("Strong Bullish Trend (+16%)")
         elif trend == "MILD_BULLISH":
-            up_score += 3.0
-            down_score -= 2.0
-            up_confluences.append("Mild Bullish Flow (+3%)")
+            up_score += 10.0
+            down_score = 25.0  # Hard lock: NEVER take PUT in a mild bull market
+            up_confluences.append("Mild Bullish Trend (+10%)")
         elif trend == "STRONG_BEARISH":
-            down_score += 6.0
-            up_score -= 4.0
-            down_confluences.append("Bearish Trend Baseline (+6%)")
+            down_score += 16.0
+            up_score = 25.0   # Hard lock: NEVER take CALL in a strong bear market
+            down_confluences.append("Strong Bearish Trend (+16%)")
         elif trend == "MILD_BEARISH":
-            down_score += 3.0
-            up_score -= 2.0
-            down_confluences.append("Mild Bearish Flow (+3%)")
+            down_score += 10.0
+            up_score = 25.0   # Hard lock: NEVER take CALL in a mild bear market
+            down_confluences.append("Mild Bearish Trend (+10%)")
 
         # 2. Active Candle Price Action (Primary signal for 1M candle close)
         c_color = active_c["color"]
@@ -1521,46 +1524,48 @@ You MUST respond strictly in valid JSON format matching this schema:
 
         if c_color == "GREEN":
             # Green candle body momentum
-            up_score += body_ratio * 22.0
-            down_score -= body_ratio * 12.0
+            if not is_bearish_trend:
+                up_score += body_ratio * 25.0
+            down_score -= body_ratio * 15.0
             if body_ratio >= 0.35:
                 up_confluences.append(f"Solid Green Expansion ({body_ratio*100:.0f}% body)")
 
             # Overhead Seller Wick: if sellers pushed down from highs
-            if upper_wick >= 0.20:
-                down_score += upper_wick * 35.0
-                up_score -= upper_wick * 30.0
-                down_confluences.append(f"Upper Seller Rejection Wick ({upper_wick*100:.0f}%)")
-            elif upper_wick <= 0.12 and body_ratio >= 0.25:
-                up_score += 7.0
+            if upper_wick >= 0.18:
+                up_score -= upper_wick * 40.0
+                if trend == "SIDEWAYS_CONSOLIDATION":
+                    down_score += upper_wick * 30.0
+                    down_confluences.append(f"Upper Seller Rejection Wick ({upper_wick*100:.0f}%)")
+            elif upper_wick <= 0.12 and body_ratio >= 0.28:
+                up_score += 8.0
                 up_confluences.append("Clean Bullish Close near Highs")
 
-            # Lower Buyer Hammer Wick: if buyers absorbed lows
-            if lower_wick >= 0.20:
-                up_score += lower_wick * 28.0
-                down_score -= lower_wick * 18.0
+            # Lower Buyer Hammer Wick: buyers absorbed lows
+            if lower_wick >= 0.20 and not is_bearish_trend:
+                up_score += lower_wick * 30.0
                 up_confluences.append(f"Bullish Hammer Absorption Wick ({lower_wick*100:.0f}%)")
 
         elif c_color == "RED":
             # Red candle body momentum
-            down_score += body_ratio * 22.0
-            up_score -= body_ratio * 12.0
+            if not is_bullish_trend:
+                down_score += body_ratio * 25.0
+            up_score -= body_ratio * 15.0
             if body_ratio >= 0.35:
                 down_confluences.append(f"Solid Red Expansion ({body_ratio*100:.0f}% body)")
 
-            # Lower Buyer Wick: if buyers defended floor and bounced
-            if lower_wick >= 0.20:
-                up_score += lower_wick * 35.0
-                down_score -= lower_wick * 30.0
-                up_confluences.append(f"Lower Buyer Defense Wick ({lower_wick*100:.0f}%)")
-            elif lower_wick <= 0.12 and body_ratio >= 0.25:
-                down_score += 7.0
+            # Lower Buyer Wick: buyers defended lows
+            if lower_wick >= 0.18:
+                down_score -= lower_wick * 40.0
+                if trend == "SIDEWAYS_CONSOLIDATION":
+                    up_score += lower_wick * 30.0
+                    up_confluences.append(f"Lower Buyer Defense Wick ({lower_wick*100:.0f}%)")
+            elif lower_wick <= 0.12 and body_ratio >= 0.28:
+                down_score += 8.0
                 down_confluences.append("Clean Bearish Close near Lows")
 
-            # Upper Seller Star Wick: if sellers knocked down rallies
-            if upper_wick >= 0.20:
-                down_score += upper_wick * 28.0
-                up_score -= upper_wick * 18.0
+            # Upper Seller Star Wick: sellers knocked down rallies
+            if upper_wick >= 0.20 and not is_bullish_trend:
+                down_score += upper_wick * 30.0
                 down_confluences.append(f"Bearish Shooting Star Wick ({upper_wick*100:.0f}%)")
 
         # 3. Two-Candle Reversal & Engulfing Confluence
@@ -1569,75 +1574,82 @@ You MUST respond strictly in valid JSON format matching this schema:
         curr_h = active_c["h"]
 
         # Bullish Engulfing: Current green candle engulfs previous red candle
-        if c_color == "GREEN" and prev_color == "RED" and body_ratio >= 0.32 and curr_h >= (prev_h * 1.05):
+        if c_color == "GREEN" and prev_color == "RED" and body_ratio >= 0.32 and curr_h >= (prev_h * 1.05) and not is_bearish_trend:
             up_score += 16.0
-            down_score -= 12.0
+            down_score -= 15.0
             up_confluences.append("Bullish Engulfing Breakout")
 
         # Bearish Engulfing: Current red candle engulfs previous green candle
-        if c_color == "RED" and prev_color == "GREEN" and body_ratio >= 0.32 and curr_h >= (prev_h * 1.05):
+        if c_color == "RED" and prev_color == "GREEN" and body_ratio >= 0.32 and curr_h >= (prev_h * 1.05) and not is_bullish_trend:
             down_score += 16.0
-            up_score -= 12.0
+            up_score -= 15.0
             down_confluences.append("Bearish Engulfing Breakdown")
 
         # Two consecutive same-color expansion
-        if c_color == "GREEN" and prev_color == "GREEN" and body_ratio >= 0.28:
+        if c_color == "GREEN" and prev_color == "GREEN" and body_ratio >= 0.28 and not is_bearish_trend:
             up_score += 8.0
             up_confluences.append("Consecutive Green Expansion")
-        elif c_color == "RED" and prev_color == "RED" and body_ratio >= 0.28:
+        elif c_color == "RED" and prev_color == "RED" and body_ratio >= 0.28 and not is_bullish_trend:
             down_score += 8.0
             down_confluences.append("Consecutive Red Expansion")
 
         # 4. Support & Resistance Channel Position (pos: 0.0=Resistance Ceiling, 1.0=Support Floor)
-        if pos <= 0.30:
+        if pos <= 0.25:
             # Resistance Ceiling Zone
-            if upper_wick >= 0.18 or c_color == "RED":
-                down_score += 16.0 + (upper_wick * 20.0)
-                up_score -= 22.0
-                down_confluences.append(f"Resistance Ceiling Wall Rejection (pos {pos*100:.0f}%)")
-            elif c_color == "GREEN" and body_ratio >= 0.36 and upper_wick <= 0.14:
-                up_score += 14.0
-                down_score -= 10.0
-                up_confluences.append("Confirmed Resistance Breakout Expansion")
+            if is_bullish_trend:
+                # In Bullish trend near ceiling: Only allow CALL if candle cleanly broke out with strong body
+                if c_color == "GREEN" and body_ratio >= 0.40 and upper_wick <= 0.12:
+                    up_score += 12.0
+                    up_confluences.append("Confirmed Resistance Breakout Expansion")
+                else:
+                    up_score -= 18.0  # Don't buy directly into ceiling wall without breakout
+            elif trend == "SIDEWAYS_CONSOLIDATION":
+                # In sideways range, look for ceiling wall rejection (PUT)
+                if upper_wick >= 0.25 or (c_color == "RED" and prev_color == "GREEN"):
+                    down_score += 18.0 + (upper_wick * 20.0)
+                    up_score -= 25.0
+                    down_confluences.append(f"Range Ceiling Wall Rejection (pos {pos*100:.0f}%)")
+                else:
+                    up_score -= 18.0
             else:
-                up_score -= 14.0
+                up_score -= 20.0
 
-        elif pos >= 0.70:
+        elif pos >= 0.75:
             # Support Floor Zone
-            if lower_wick >= 0.18 or c_color == "GREEN":
-                up_score += 16.0 + (lower_wick * 20.0)
-                down_score -= 22.0
-                up_confluences.append(f"Support Floor Bounce Defense (pos {pos*100:.0f}%)")
-            elif c_color == "RED" and body_ratio >= 0.36 and lower_wick <= 0.14:
-                down_score += 14.0
-                up_score -= 10.0
-                down_confluences.append("Confirmed Support Breakdown Expansion")
+            if is_bearish_trend:
+                # In Bearish trend near floor: Only allow PUT if candle cleanly broke down with strong body
+                if c_color == "RED" and body_ratio >= 0.40 and lower_wick <= 0.12:
+                    down_score += 12.0
+                    down_confluences.append("Confirmed Support Breakdown Expansion")
+                else:
+                    down_score -= 18.0  # Don't sell directly into floor without breakdown
+            elif trend == "SIDEWAYS_CONSOLIDATION":
+                # In sideways range, look for floor bounce (CALL)
+                if lower_wick >= 0.25 or (c_color == "GREEN" and prev_color == "RED"):
+                    up_score += 18.0 + (lower_wick * 20.0)
+                    down_score -= 25.0
+                    up_confluences.append(f"Range Floor Bounce Defense (pos {pos*100:.0f}%)")
+                else:
+                    down_score -= 18.0
             else:
-                down_score -= 14.0
+                down_score -= 20.0
 
         else:
-            # Mid-Channel Open Space
-            if c_color == "GREEN" and body_ratio >= 0.28:
-                up_score += 8.0
+            # Mid-Channel Open Space (Healthy continuation area)
+            if c_color == "GREEN" and body_ratio >= 0.28 and not is_bearish_trend:
+                up_score += 10.0
                 up_confluences.append("Mid-Channel Bullish Momentum")
-            elif c_color == "RED" and body_ratio >= 0.28:
-                down_score += 8.0
+            elif c_color == "RED" and body_ratio >= 0.28 and not is_bullish_trend:
+                down_score += 10.0
                 down_confluences.append("Mid-Channel Bearish Momentum")
 
         # 5. Streak Climax Exhaustion Protection
-        if green_streak >= 5:
-            penalty = (green_streak - 4) * 5.0
+        if green_streak >= 4:
+            penalty = (green_streak - 3) * 10.0
             up_score -= penalty
-            if upper_wick >= 0.16:
-                down_score += 12.0
-                down_confluences.append(f"Climax Exhaustion Reversal ({green_streak} green candles)")
-
-        if red_streak >= 5:
-            penalty = (red_streak - 4) * 5.0
+        if red_streak >= 4:
+            penalty = (red_streak - 3) * 10.0
             down_score -= penalty
-            if lower_wick >= 0.16:
-                up_score += 12.0
-                up_confluences.append(f"Climax Floor Bounce ({red_streak} red candles)")
 
         # 6. Clamp Probabilities to Valid Range [25.0, 96.0]
         up_prob = min(96.0, max(25.0, up_score))
@@ -1920,6 +1932,7 @@ class TradingSessionManager:
 
         self.active_trade: Optional[TradeRecord] = None
         self.trade_history: List[TradeRecord] = []
+        self.loss_cooldown_until: float = 0.0
 
     def get_stats(self) -> SessionStats:
         with self.lock:
@@ -1985,6 +1998,10 @@ class TradingSessionManager:
                 raise ValueError("An active paper trade is already open. Wait for candle expiry.")
 
             now = time.time()
+            if now < self.loss_cooldown_until:
+                remaining = int(self.loss_cooldown_until - now)
+                raise ValueError(f"Post-loss capital defense cooldown active ({remaining}s remaining). Waiting for market stabilization.")
+
             trade = TradeRecord(
                 id=str(uuid.uuid4())[:8],
                 timestamp=datetime.now(timezone.utc).strftime("%H:%M:%S"),
@@ -2068,6 +2085,9 @@ class TradingSessionManager:
                 self.balance -= trade.trade_amount
                 trade.pnl = -trade.trade_amount
                 self.losses += 1
+                # Enforce a 55-second cooldown after a loss to prevent back-to-back revenge trading
+                self.loss_cooldown_until = time.time() + 55.0
+                logger.info("🛡️ [CAPITAL DEFENSE] Enforced 55s cooldown after loss to allow erratic market spike to settle.")
             else:
                 trade.pnl = 0.0
                 self.draws += 1

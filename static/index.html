@@ -2114,9 +2114,9 @@
       const currentBucket = Math.floor(nowMs / (candleTimeframe * 1000));
 
       // 1. Precise Trade Execution Check:
-      // When auto-trading is active AND we hit candle boundary (last 4 seconds or first 1 second of candle)
+      // When auto-trading is active AND we hit candle boundary (last 2 seconds or first 1 second of candle)
       // AND we haven't already executed for this bucket:
-      const isBoundaryWindow = (secondsLeft <= 4 || secondsLeft >= (candleTimeframe - 1));
+      const isBoundaryWindow = (secondsLeft <= 2 || secondsLeft >= (candleTimeframe - 1));
       if (autoTradingActive && isBoundaryWindow && lastExecutedBucket !== currentBucket && !isCycleBusy && !activePendingTrade) {
         lastExecutedBucket = currentBucket;
         lastScanMs = nowMs;
