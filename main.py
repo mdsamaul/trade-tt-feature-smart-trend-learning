@@ -358,8 +358,11 @@ async def auto_cycle(payload: AutoCycleRequest):
         now = time.time()
 
         resolved_trade = None
-        # Step 1: Check if pending trade needs verification (with 3-second grace window for candle boundary sync)
-        if active and (now >= (active.expiry_timestamp - 3.0) or payload.force_verify):
+        # Step 1: Check if pending trade needs verification
+        # Adaptive grace window: 0.5s for 5s turbo, 1.0s for 10s turbo, 2.0s for standard 60s
+        tf_sec = payload.timeframe_seconds or 60
+        grace_window = min(2.0, max(0.4, tf_sec * 0.1))
+        if active and (now >= (active.expiry_timestamp - grace_window) or payload.force_verify):
             # Verify pending trade
             raw_pil = VisionProcessor.decode_base64_image(payload.image_base64)
             cropped_pil = VisionProcessor.auto_crop_quotex_chart(raw_pil, payload.crop_bounds)
@@ -372,15 +375,15 @@ async def auto_cycle(payload: AutoCycleRequest):
                 raw_image_b64=payload.image_base64
             )
             resolved_trade = trading_session.resolve_trade(close_price=close_price, trade_id=active.id)
-            active = None  # Trade resolved; ready to scan for next setup
+            active = None  # Trade resolved; ready to scan for next candle setup
 
-            # Post-Trade Safety Shield: Do NOT open an immediate trade on the stale verification frame.
-            # Return resolution immediately so UI updates stats, plays audio, and awaits next fresh live candle.
-            return {
-                "cycle_action": f"TRADE_RESOLVED_{resolved_trade.outcome}",
-                "resolved_trade": resolved_trade.model_dump(),
-                "session": trading_session.get_stats().model_dump()
-            }
+            # If this cycle was purely for verification and NOT for executing a next candle trade, return resolution
+            if not payload.execute_trade:
+                return {
+                    "cycle_action": f"TRADE_RESOLVED_{resolved_trade.outcome}",
+                    "resolved_trade": resolved_trade.model_dump(),
+                    "session": trading_session.get_stats().model_dump()
+                }
 
         # Step 2: If a trade is still in progress (not expired), wait
         if active and now < active.expiry_timestamp:
@@ -633,6 +636,16 @@ async def websocket_trade_signals(websocket: WebSocket):
                     await websocket.send_json({"type": "PONG", "timestamp": int(time.time() * 1000)})
                 elif msg.get("type") == "TRADE_EXECUTED_ACK":
                     logger.info(f"⚡ [TAMPERMONKEY ACK] {msg.get('direction')} clicked inside Quotex DOM in {msg.get('latency_ms', 0)}ms!")
+                elif msg.get("type") == "TRADE_OUTCOME_REPORT":
+                    outcome = str(msg.get("outcome", "")).upper()
+                    trade_id = str(msg.get("trade_id", ""))
+                    payout = float(msg.get("payout", 0.0))
+                    if outcome in ["WIN", "LOSS"]:
+                        logger.info(f"🎯 [TAMPERMONKEY QUOTEX OUTCOME] Ground truth from Quotex DOM: {outcome} (Payout: ${payout:.2f})")
+                        trading_session.override_trade_outcome(
+                            trade_id=trade_id,
+                            new_outcome=outcome
+                        )
             except Exception:
                 pass
     except WebSocketDisconnect:

@@ -1029,6 +1029,8 @@
               </span>
               <span class="control-label">Candle Timeframe:</span>
               <select id="timeframeSelect">
+                <option value="5">5 Seconds (Turbo)</option>
+                <option value="10">10 Seconds (Turbo)</option>
                 <option value="15">15 Seconds</option>
                 <option value="30">30 Seconds</option>
                 <option value="60" selected>60s (1 Minute)</option>
@@ -2105,46 +2107,59 @@
     // =========================================================================
     function updateCandleClock() {
       const now = new Date();
-      const currentSeconds = now.getSeconds();
+      const nowMs = now.getTime();
+      const epochSeconds = Math.floor(nowMs / 1000);
 
-      // Quotex candles are strictly bound to system clock (00 to 59 seconds)
-      const secondsIntoCandle = currentSeconds % candleTimeframe;
+      // Quotex candles are strictly bound to system epoch time
+      const secondsIntoCandle = epochSeconds % candleTimeframe;
       let secondsLeft = candleTimeframe - secondsIntoCandle;
       if (secondsLeft === 0) secondsLeft = candleTimeframe;
       candleSecondsLeft = secondsLeft;
 
-      // Update progress bar
-      const pct = (secondsLeft / candleTimeframe) * 100;
+      // Millisecond accuracy for smooth progress bar and turbo display
+      const msIntoCandle = nowMs % (candleTimeframe * 1000);
+      const msLeft = (candleTimeframe * 1000) - msIntoCandle;
+      const pct = (msLeft / (candleTimeframe * 1000)) * 100;
       if (cycleProgressBar) cycleProgressBar.style.width = `${pct}%`;
-      if (cycleSecondsRemaining) cycleSecondsRemaining.textContent = `${secondsLeft}s`;
+      if (cycleSecondsRemaining) {
+        cycleSecondsRemaining.textContent = candleTimeframe <= 10 
+          ? `${(msLeft / 1000).toFixed(1)}s` 
+          : `${secondsLeft}s`;
+      }
 
       // Update active trade countdown
       if (activePendingTrade && atCountdown) {
-        atCountdown.textContent = `${Math.max(0, secondsLeft)}s`;
+        atCountdown.textContent = candleTimeframe <= 10
+          ? `${(msLeft / 1000).toFixed(1)}s`
+          : `${Math.max(0, secondsLeft)}s`;
       }
 
       // Live status display on button
       if (autoTradingActive && toggleAutoBtn) {
-        toggleAutoBtn.innerHTML = `⏹ Stop Autonomous Agent (${secondsLeft}s)`;
+        const timeDisplay = candleTimeframe <= 10 ? `${(msLeft / 1000).toFixed(1)}s` : `${secondsLeft}s`;
+        toggleAutoBtn.innerHTML = `⏹ Stop Autonomous Agent (${timeDisplay})`;
       }
 
-      const nowMs = now.getTime();
       const currentBucket = Math.floor(nowMs / (candleTimeframe * 1000));
 
       // 1. Precise Trade Execution Check:
-      // When auto-trading is active AND we hit candle boundary (last 2 seconds or first 1 second of candle)
-      // AND we haven't already executed for this bucket:
-      const isBoundaryWindow = (secondsLeft <= 2 || secondsLeft >= (candleTimeframe - 1));
+      // When auto-trading is active AND we hit candle boundary:
+      // For turbo timeframes (<= 10s): trigger in the final 1 second before candle close (secondsLeft <= 1)
+      // For standard timeframes (> 10s): trigger in final 2 seconds or first 1 second of candle
+      const isBoundaryWindow = candleTimeframe <= 10
+        ? (secondsLeft <= 1 || (secondsIntoCandle === 0 && now.getMilliseconds() < 400))
+        : (secondsLeft <= 2 || secondsLeft >= (candleTimeframe - 1));
+
       if (autoTradingActive && isBoundaryWindow && lastExecutedBucket !== currentBucket && !isCycleBusy && !activePendingTrade) {
         lastExecutedBucket = currentBucket;
         lastScanMs = nowMs;
-        executeCycle(false, true); // Open paper trade and trigger auto-click!
+        executeCycle(false, true); // Open trade and trigger 0ms Tampermonkey DOM click!
         return;
       }
 
-      // 2. Continuous Active Auto-Scanner Heartbeat (Runs every 2.5 seconds automatically!)
-      // Scans live chart, updates preview, price, trend, and checks trade expiry resolution
-      const scanInterval = 2500; // 2.5 seconds
+      // 2. Continuous Active Auto-Scanner Heartbeat:
+      // For 5s or 10s turbo, scan every 1200ms; for standard timeframes scan every 2500ms
+      const scanInterval = candleTimeframe <= 10 ? 1200 : 2500;
       if ((nowMs - lastScanMs >= scanInterval) && !isCycleBusy) {
         lastScanMs = nowMs;
         executeCycle(false, false);
@@ -2696,7 +2711,7 @@
     checkTampermonkeyStatus();
     setInterval(checkTampermonkeyStatus, 3500);
     updateCandleClock();
-    setInterval(updateCandleClock, 250);
+    setInterval(updateCandleClock, 100);
   </script>
 </body>
 </html>

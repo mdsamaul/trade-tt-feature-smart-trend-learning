@@ -1,9 +1,9 @@
 {
   "enabled": true,
-  "call_x": 1797,
-  "call_y": 474,
-  "put_x": 1799,
-  "put_y": 532,
+  "call_x": 1809,
+  "call_y": 438,
+  "put_x": 1798,
+  "put_y": 491,
   "restore_cursor": false,
   "account_mode": "ALL"
 }

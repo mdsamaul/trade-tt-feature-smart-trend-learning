@@ -4,24 +4,38 @@
 // @version      1.2.0
 // @description  Instant sub-millisecond execution for Quotex Demo & Real Live accounts with 100% Sniper accuracy target. Displays real-time candle probability percentage in an ultra-modern popup and executes via 0ms DOM events.
 // @author       Antigravity AI
-// @match        *://*.qxbroker.com/*
-// @match        *://*.quotex.io/*
-// @match        *://*.quotex.com/*
+// @match        *://*.market-qx.info/*
+// @match        *://market-qx.info/*
 // @match        *://*.market-qx.pro/*
-// @match        *://*.qxbroker.io/*
-// @match        *://*.qx-broker.com/*
-// @match        *://*.quotex-broker.com/*
-// @match        *://*.qxmarket.com/*
-// @match        *://*.quotexmarket.com/*
-// @match        *://*.market-qx.com/*
-// @match        *://*.qx-trade.com/*
-// @match        *://qxbroker.com/*
-// @match        *://quotex.io/*
-// @match        *://quotex.com/*
 // @match        *://market-qx.pro/*
+// @match        *://*.market-qx.com/*
+// @match        *://market-qx.com/*
+// @match        *://*.market-qx.net/*
+// @match        *://market-qx.net/*
+// @match        *://*.market-qx.org/*
+// @match        *://market-qx.org/*
+// @match        *://*.market-qx.biz/*
+// @match        *://market-qx.biz/*
+// @match        *://*.market-qx.online/*
+// @match        *://market-qx.online/*
+// @match        *://*.qxbroker.com/*
+// @match        *://qxbroker.com/*
+// @match        *://*.quotex.io/*
+// @match        *://quotex.io/*
+// @match        *://*.quotex.com/*
+// @match        *://quotex.com/*
+// @match        *://*.qxbroker.io/*
 // @match        *://qxbroker.io/*
+// @match        *://*.qx-broker.com/*
 // @match        *://qx-broker.com/*
+// @match        *://*.quotex-broker.com/*
 // @match        *://quotex-broker.com/*
+// @match        *://*.qxmarket.com/*
+// @match        *://qxmarket.com/*
+// @match        *://*.quotexmarket.com/*
+// @match        *://quotexmarket.com/*
+// @match        *://*.qx-trade.com/*
+// @match        *://qx-trade.com/*
 // @match        *://localhost/*
 // @match        *://127.0.0.1/*
 // @icon         https://quotex.com/favicon.ico
@@ -155,7 +169,12 @@
         '.button-call',
         '.call-button',
         'button[class*="call"]',
-        'div[class*="call"]'
+        'div[class*="call"]',
+        'button[class*="buy"]',
+        'div[class*="buy"]',
+        '.buy-btn',
+        '.btn-buy',
+        '.button-buy'
       ];
       for (const sel of callSelectors) {
         try {
@@ -190,7 +209,12 @@
         '.button-put',
         '.put-button',
         'button[class*="put"]',
-        'div[class*="put"]'
+        'div[class*="put"]',
+        'button[class*="sell"]',
+        'div[class*="sell"]',
+        '.sell-btn',
+        '.btn-sell',
+        '.button-sell'
       ];
       for (const sel of putSelectors) {
         try {
@@ -221,8 +245,9 @@
           const isGreen = bg.includes('0, 192,') || bg.includes('0, 231,') || bg.includes('15, 175,') ||
                           bg.includes('0, 184,') || bg.includes('0, 255, 136') || bg.includes('#00e793') ||
                           bg.includes('#00ff88') || bg.includes('#0faf59') || bg.includes('rgb(0, 192');
-          const isUpText = text === 'up' || text === 'call' || text === 'выше' || text === 'вверх' ||
-                           text === 'higher' || cls.includes('call') || (cls.includes('up') && !cls.includes('upload'));
+          const isUpText = text === 'up' || text === 'call' || text === 'buy' || text.startsWith('buy') ||
+                           text === 'выше' || text === 'вверх' || text === 'higher' ||
+                           cls.includes('call') || (cls.includes('up') && !cls.includes('upload')) || cls.includes('buy');
           if (isGreen || isUpText) {
             callBtn = b;
           }
@@ -233,8 +258,9 @@
           const isRed = bg.includes('255, 75,') || bg.includes('255, 59,') || bg.includes('229, 57,') ||
                         bg.includes('255, 51, 102') || bg.includes('#ff3b56') || bg.includes('#ff3366') ||
                         bg.includes('#e53935') || bg.includes('rgb(255, 59');
-          const isDownText = text === 'down' || text === 'put' || text === 'ниже' || text === 'вниз' ||
-                             text === 'lower' || cls.includes('put') || cls.includes('down');
+          const isDownText = text === 'down' || text === 'put' || text === 'sell' || text.startsWith('sell') ||
+                             text === 'ниже' || text === 'вниз' || text === 'lower' ||
+                             cls.includes('put') || cls.includes('down') || cls.includes('sell');
           if (isRed || isDownText) {
             putBtn = b;
           }
@@ -618,8 +644,8 @@
     hudContainer.innerHTML = `
       <div style="
         position: fixed;
-        top: 14px;
-        right: 170px;
+        bottom: 22px;
+        left: 75px;
         z-index: 9999999;
         display: flex;
         align-items: center;
@@ -634,7 +660,8 @@
         color: #f0f4fc;
         user-select: none;
         backdrop-filter: blur(8px);
-        transition: all 0.25s ease;
+        transition: box-shadow 0.25s ease;
+        cursor: grab;
       " id="quotex-hud-pill">
         <span id="hud-status-dot" style="
           width: 8px; height: 8px; border-radius: 50%; background: #ff3366;
@@ -778,6 +805,43 @@
 
     // Interactive Button Calibrator (Click Calibrate -> click UP button -> click DOWN button)
     document.getElementById('hud-calibrate-btn').addEventListener('click', startInteractiveCalibration);
+
+    // Make HUD pill freely draggable anywhere on screen
+    const pill = document.getElementById('quotex-hud-pill');
+    let isDragging = false;
+    let startX = 0, startY = 0;
+    let startLeft = 0, startTop = 0;
+
+    pill.addEventListener('mousedown', (e) => {
+      if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+      isDragging = true;
+      pill.style.cursor = 'grabbing';
+      const rect = pill.getBoundingClientRect();
+      startX = e.clientX;
+      startY = e.clientY;
+      startLeft = rect.left;
+      startTop = rect.top;
+      pill.style.bottom = 'auto';
+      pill.style.right = 'auto';
+      pill.style.left = `${startLeft}px`;
+      pill.style.top = `${startTop}px`;
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      pill.style.left = `${Math.max(10, Math.min(window.innerWidth - 300, startLeft + dx))}px`;
+      pill.style.top = `${Math.max(10, Math.min(window.innerHeight - 50, startTop + dy))}px`;
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        pill.style.cursor = 'grab';
+      }
+    });
   }
 
   function startInteractiveCalibration() {
