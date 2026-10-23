@@ -132,14 +132,32 @@
     let callBtn = null;
     let putBtn = null;
 
+    // 0. Targeted search in Quotex Deal Form / Right Sidebar (covers market-qx.info, quotex.com)
+    const dealContainers = document.querySelectorAll('.section-deal, .deal-form, form.deal-form, [class*="section-deal"], [class*="sidebar"]');
+    for (const container of dealContainers) {
+      if (container.closest && container.closest('#quotex-instant-hud-container')) continue;
+      const btns = container.querySelectorAll('button, div[role="button"]');
+      for (const b of btns) {
+        if (!isElementVisible(b)) continue;
+        const text = (b.innerText || b.textContent || '').trim().toLowerCase();
+        const cls = (b.className || '').toString().toLowerCase();
+        if (!callBtn && (text.includes('buy') || text.includes('call') || text === 'up' || cls.includes('call') || cls.includes('buy') || cls.includes('btn-call'))) {
+          callBtn = b;
+        }
+        if (!putBtn && (text.includes('sell') || text.includes('put') || text === 'down' || cls.includes('put') || cls.includes('sell') || cls.includes('btn-put'))) {
+          putBtn = b;
+        }
+      }
+    }
+
     // 1. User custom saved selectors (calibrated by user clicking the buttons)
-    if (customCallSelector) {
+    if (!callBtn && customCallSelector) {
       try {
         const el = document.querySelector(customCallSelector);
         if (el && isElementVisible(el)) callBtn = el;
       } catch (e) {}
     }
-    if (customPutSelector) {
+    if (!putBtn && customPutSelector) {
       try {
         const el = document.querySelector(customPutSelector);
         if (el && isElementVisible(el)) putBtn = el;
@@ -274,6 +292,7 @@
   function isElementVisible(el) {
     if (!el) return false;
     try {
+      if (el.closest && (el.closest('#quotex-instant-hud-container') || el.closest('#quotex-signal-popup'))) return false;
       const rect = el.getBoundingClientRect();
       return rect.width > 20 && rect.height > 20 && rect.top >= 0 && rect.left >= 0;
     } catch (e) {
@@ -286,6 +305,10 @@
   // =========================================================================
   function detectQuotexAccountType() {
     try {
+      const href = (window.location.href || '').toLowerCase();
+      if (href.includes('demo')) return 'DEMO';
+      if (href.includes('live')) return 'REAL';
+
       // 1. Inspect balance dropdown / header text
       const userMenu = document.querySelector('.usermenu__info-wrapper, .usermenu__info-levels, .account-type, .usermenu, .header__user');
       const text = ((userMenu ? userMenu.innerText : '') + ' ' + (document.body.innerText || '')).toLowerCase();
@@ -306,27 +329,34 @@
     return 'DEMO & REAL';
   }
 
+  // Proactive background button caching (eliminates DOM query latency at click time)
+  let cachedCallBtn = null;
+  let cachedPutBtn = null;
+
+  function refreshCachedButtons() {
+    try {
+      const btns = findQuotexButtons();
+      if (btns.callBtn) cachedCallBtn = btns.callBtn;
+      if (btns.putBtn) cachedPutBtn = btns.putBtn;
+    } catch (e) {}
+  }
+
+  setInterval(refreshCachedButtons, 300);
+
   // =========================================================================
   // ZERO-MOVEMENT INSTANT DISPATCHER (0ms DOM CLICK)
   // =========================================================================
   function executeInstantDOMClick(direction, signal) {
     const startTime = performance.now();
-    detectedAccountType = detectQuotexAccountType();
 
-    // Account mode validation
-    if (accountMode === 'DEMO' && detectedAccountType === 'REAL') {
-      console.warn('⚠️ [Quotex Instant Trader] Trade blocked: Account Mode is set to DEMO ONLY, but active account is REAL.');
-      showHudNotification('⚠️ Blocked: DEMO ONLY mode is active!', '#ffb800');
-      return false;
+    // ⚡ ZERO-DELAY INSTANT EXECUTION: Pull pre-cached button reference (Zero query overhead)
+    let targetBtn = direction === 'CALL' ? cachedCallBtn : cachedPutBtn;
+    if (!targetBtn || !isElementVisible(targetBtn)) {
+      const fresh = findQuotexButtons();
+      targetBtn = direction === 'CALL' ? fresh.callBtn : fresh.putBtn;
+      if (direction === 'CALL' && fresh.callBtn) cachedCallBtn = fresh.callBtn;
+      if (direction === 'PUT' && fresh.putBtn) cachedPutBtn = fresh.putBtn;
     }
-    if (accountMode === 'REAL' && detectedAccountType === 'DEMO') {
-      console.warn('⚠️ [Quotex Instant Trader] Trade blocked: Account Mode is set to REAL ONLY, but active account is DEMO.');
-      showHudNotification('⚠️ Blocked: REAL ONLY mode is active!', '#ffb800');
-      return false;
-    }
-
-    const buttons = findQuotexButtons();
-    const targetBtn = direction === 'CALL' ? buttons.callBtn : buttons.putBtn;
 
     if (!targetBtn) {
       console.error(`❌ [Quotex Instant Trader] Could not locate ${direction} button in Quotex DOM!`);
@@ -335,7 +365,12 @@
       return false;
     }
 
-    // High-precision pointer event sequence (satisfies React 17/18, Vue, Angular event listeners)
+    // ⚡ 0ms IMMEDIATE DOM CLICK DISPATCH:
+    // Fire click directly on line 1 without waiting for any layout calculations!
+    try {
+      targetBtn.click();
+    } catch (e) {}
+
     const rect = targetBtn.getBoundingClientRect();
     const clientX = rect.left + rect.width / 2;
     const clientY = rect.top + rect.height / 2;
@@ -343,6 +378,7 @@
     const eventInit = {
       bubbles: true,
       cancelable: true,
+      composed: true,
       view: window,
       clientX: clientX,
       clientY: clientY,
@@ -355,22 +391,21 @@
       buttons: 1
     };
 
-    try {
-      window.focus();
-      targetBtn.focus();
-    } catch (e) {}
+    // Dispatch full pointer event burst to target button and all child/parent layers
+    const targets = [targetBtn];
+    if (targetBtn.firstElementChild) targets.push(targetBtn.firstElementChild);
+    if (targetBtn.parentElement && (targetBtn.parentElement.tagName === 'BUTTON' || targetBtn.parentElement.getAttribute('role') === 'button')) {
+      targets.push(targetBtn.parentElement);
+    }
 
-    // Dispatch pointer events to the button
-    targetBtn.dispatchEvent(new PointerEvent('pointerdown', eventInit));
-    targetBtn.dispatchEvent(new MouseEvent('mousedown', eventInit));
-    targetBtn.dispatchEvent(new PointerEvent('pointerup', eventInit));
-    targetBtn.dispatchEvent(new MouseEvent('mouseup', eventInit));
-    targetBtn.click();
-
-    // Also dispatch to first child if button has inner span or div
-    if (targetBtn.firstElementChild) {
+    for (const el of targets) {
       try {
-        targetBtn.firstElementChild.dispatchEvent(new MouseEvent('click', eventInit));
+        el.dispatchEvent(new PointerEvent('pointerdown', eventInit));
+        el.dispatchEvent(new MouseEvent('mousedown', eventInit));
+        el.dispatchEvent(new PointerEvent('pointerup', eventInit));
+        el.dispatchEvent(new MouseEvent('mouseup', eventInit));
+        el.dispatchEvent(new MouseEvent('click', eventInit));
+        el.click();
       } catch (e) {}
     }
 

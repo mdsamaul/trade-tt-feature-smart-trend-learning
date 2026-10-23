@@ -1465,9 +1465,10 @@ You MUST respond strictly in valid JSON format matching this schema:
             }
 
         # Filter 2: Extremely flat micro-candle (low liquidity / dead market)
-        is_micro_trap = active_c["h"] < 5 or active_c["h"] < (avg_h * 0.25)
-        if timeframe_seconds <= 10 and (active_c["body_ratio"] < 0.18 and active_c["upper_wick_ratio"] > 0.30 and active_c["lower_wick_ratio"] > 0.30):
-            is_micro_trap = True
+        if timeframe_seconds <= 10:
+            is_micro_trap = active_c["h"] < 2 or (active_c["body_ratio"] < 0.10 and active_c["upper_wick_ratio"] > 0.40 and active_c["lower_wick_ratio"] > 0.40)
+        else:
+            is_micro_trap = active_c["h"] < 4 or active_c["h"] < (avg_h * 0.20)
 
         if is_micro_trap:
             return {
@@ -1989,7 +1990,7 @@ class TradingSessionManager:
         self.rolling_window_size = int(os.getenv("ROLLING_WINDOW_SIZE", str(rolling_window_size)))
         self.target_win_rate = float(os.getenv("TARGET_ROLLING_WIN_RATE", str(target_win_rate)))
 
-        env_strict = int(os.getenv("DEFAULT_STRICTNESS", "3"))
+        env_strict = int(os.getenv("DEFAULT_STRICTNESS", "2"))
         self.current_strictness = max(1, min(6, env_strict))
         self.auto_optimize = True
 
@@ -2344,7 +2345,7 @@ class TradingSessionManager:
             self.target_achieved = False
             self.active_trade = None
             self.trade_history.clear()
-            self.current_strictness = int(os.getenv("DEFAULT_STRICTNESS", "3"))
+            self.current_strictness = int(os.getenv("DEFAULT_STRICTNESS", "2"))
             logger.info("Session reset to initial demo parameters. AI Strategy Learner permanent memory and learned loss guardrails remain 100% preserved.")
 
 
@@ -2488,13 +2489,11 @@ def dispatch_hardware_click(target_x: int, target_y: int) -> bool:
 
     # Step 1: Ensure Quotex / target window is in the foreground
     force_focus_quotex_window(target_x, target_y)
-    time.sleep(0.04)
 
     # Step 2: Physical hardware cursor placement
     user32.SetCursorPos(int(target_x), int(target_y))
-    time.sleep(0.03)
 
-    # Step 3: Win32 Virtual Desktop SendInput (Primary Path - 1 Single Click)
+    # Step 3: Win32 Virtual Desktop SendInput (Primary Path - 1 Single Instant Click)
     v_left = user32.GetSystemMetrics(76)   # SM_XVIRTUALSCREEN
     v_top = user32.GetSystemMetrics(77)    # SM_YVIRTUALSCREEN
     v_width = max(1, user32.GetSystemMetrics(78))   # SM_CXVIRTUALSCREEN
@@ -2509,7 +2508,6 @@ def dispatch_hardware_click(target_x: int, target_y: int) -> bool:
     inp_move.mi.dy = norm_y
     inp_move.mi.dwFlags = 0x0001 | 0x8000 | 0x4000  # MOVE | ABSOLUTE | VIRTUALDESK
     user32.SendInput(1, ctypes.byref(inp_move), ctypes.sizeof(_INPUT))
-    time.sleep(0.04)
 
     # Send MOUSEEVENTF_LEFTDOWN
     inp_down = _INPUT(type=0)
@@ -2517,7 +2515,7 @@ def dispatch_hardware_click(target_x: int, target_y: int) -> bool:
     inp_down.mi.dy = norm_y
     inp_down.mi.dwFlags = 0x0002 | 0x8000 | 0x4000  # LEFTDOWN | ABSOLUTE | VIRTUALDESK
     sent = user32.SendInput(1, ctypes.byref(inp_down), ctypes.sizeof(_INPUT))
-    time.sleep(0.10)  # Realistic 100ms press duration
+    time.sleep(0.035)  # 35ms click press duration for 100% reliable Chrome click registration
 
     # Send MOUSEEVENTF_LEFTUP
     inp_up = _INPUT(type=0)

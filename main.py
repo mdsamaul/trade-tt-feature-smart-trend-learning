@@ -356,18 +356,31 @@ async def auto_cycle(payload: AutoCycleRequest):
     try:
         active = trading_session.active_trade
         now = time.time()
+        tf_sec = payload.timeframe_seconds or 5
+
+        # Step 0: Ingest chart frame and calculate live candle probability ALWAYS
+        raw_pil = VisionProcessor.decode_base64_image(payload.image_base64)
+        cropped_pil = VisionProcessor.auto_crop_quotex_chart(raw_pil, payload.crop_bounds)
+        cropped_b64 = VisionProcessor.encode_image_base64(cropped_pil)
+
+        decision = vision_engine.analyze_chart(
+            image_b64=cropped_b64,
+            strictness_level=trading_session.current_strictness,
+            candle_timeframe=tf_sec
+        )
 
         resolved_trade = None
         # Step 1: Check if pending trade needs verification
-        # Adaptive grace window: 0.5s for 5s turbo, 1.0s for 10s turbo, 2.0s for standard 60s
-        tf_sec = payload.timeframe_seconds or 60
-        grace_window = min(2.0, max(0.4, tf_sec * 0.1))
-        if active and (now >= (active.expiry_timestamp - grace_window) or payload.force_verify):
-            # Verify pending trade
-            raw_pil = VisionProcessor.decode_base64_image(payload.image_base64)
-            cropped_pil = VisionProcessor.auto_crop_quotex_chart(raw_pil, payload.crop_bounds)
-            cropped_b64 = VisionProcessor.encode_image_base64(cropped_pil)
+        grace_window = min(2.0, max(0.3, tf_sec * 0.1))
+        # If in turbo mode (<=10s) but active trade had a longer expiry, cap it so it resolves seamlessly
+        is_expired = False
+        if active:
+            if tf_sec <= 10 and (active.timeframe_seconds > 10 or (now >= active.expiry_timestamp - grace_window)):
+                is_expired = True
+            elif now >= (active.expiry_timestamp - grace_window) or payload.force_verify:
+                is_expired = True
 
+        if active and is_expired:
             close_price = vision_engine.verify_price_from_frame(
                 image_b64=cropped_b64,
                 entry_price=active.entry_price,
@@ -377,35 +390,29 @@ async def auto_cycle(payload: AutoCycleRequest):
             resolved_trade = trading_session.resolve_trade(close_price=close_price, trade_id=active.id)
             active = None  # Trade resolved; ready to scan for next candle setup
 
-            # If this cycle was purely for verification and NOT for executing a next candle trade, return resolution
+            # If this cycle was purely for verification and NOT for executing a next candle trade, return resolution WITH live decision
             if not payload.execute_trade:
                 return {
                     "cycle_action": f"TRADE_RESOLVED_{resolved_trade.outcome}",
+                    "decision": decision,
                     "resolved_trade": resolved_trade.model_dump(),
+                    "cropped_preview_b64": cropped_b64,
                     "session": trading_session.get_stats().model_dump()
                 }
 
-        # Step 2: If a trade is still in progress (not expired), wait
+        # Step 2: If a trade is still actively counting down in progress, return state WITH live decision
         if active and now < active.expiry_timestamp:
-            remaining = int(active.expiry_timestamp - now)
+            remaining = max(1, int(active.expiry_timestamp - now))
             return {
                 "cycle_action": "TRADE_IN_PROGRESS",
                 "remaining_seconds": remaining,
                 "active_trade": active.model_dump(),
+                "decision": decision,
+                "cropped_preview_b64": cropped_b64,
                 "session": trading_session.get_stats().model_dump()
             }
 
-        # Step 3: No active trade (either none open or just resolved) -> Ingest and analyze frame
-        raw_pil = VisionProcessor.decode_base64_image(payload.image_base64)
-        cropped_pil = VisionProcessor.auto_crop_quotex_chart(raw_pil, payload.crop_bounds)
-        cropped_b64 = VisionProcessor.encode_image_base64(cropped_pil)
-
-        decision = vision_engine.analyze_chart(
-            image_b64=cropped_b64,
-            strictness_level=trading_session.current_strictness,
-            candle_timeframe=payload.timeframe_seconds
-        )
-
+        # Step 3: No active trade (either none open or just resolved) -> evaluate setup for execution
         direction = decision["direction"]
         confidence = float(decision.get("confidence", 0.0))
         opened_trade = None
@@ -426,7 +433,7 @@ async def auto_cycle(payload: AutoCycleRequest):
                     trend=decision["trend"],
                     setup_grade=decision["setup_grade"],
                     pattern_name=decision.get("pattern_name", "Standard"),
-                    timeframe_seconds=payload.timeframe_seconds,
+                    timeframe_seconds=tf_sec,
                     indicators_summary={
                         "rejection_wick_found": decision.get("rejection_wick_found", False),
                         "key_level": decision.get("support_resistance_level", ""),
@@ -446,9 +453,11 @@ async def auto_cycle(payload: AutoCycleRequest):
                     "confidence": confidence,
                     "probability": confidence,
                     "candle_probability": decision.get("candle_probability", confidence),
+                    "up_probability": decision.get("up_probability", confidence if direction == "CALL" else (100 - confidence)),
+                    "down_probability": decision.get("down_probability", confidence if direction == "PUT" else (100 - confidence)),
                     "trade_id": opened_trade.id if opened_trade else str(int(time.time())),
                     "timestamp": int(time.time() * 1000),
-                    "timeframe": payload.timeframe_seconds,
+                    "timeframe": tf_sec,
                     "pattern_name": decision.get("pattern_name", "UNKNOWN"),
                     "candle_color": decision.get("candle_color", "GREEN" if direction == "CALL" else "RED"),
                     "source": "AI_AGENT",
@@ -457,8 +466,8 @@ async def auto_cycle(payload: AutoCycleRequest):
                 }
                 await signal_broadcaster.broadcast_signal(signal_data)
 
-                # Fallback to physical mouse clicking ONLY if no Tampermonkey tab is active and auto_clicker is enabled
-                if len(signal_broadcaster.active_connections) == 0 and auto_clicker.config.enabled:
+                # Dual-redundant execution: also trigger physical mouse click if enabled
+                if auto_clicker.config.enabled:
                     auto_clicker.execute_click(direction)
         elif direction in ["CALL", "PUT"] and not payload.execute_trade:
             action = f"SIGNAL_ACTIVE_{direction}_PREVIEW"

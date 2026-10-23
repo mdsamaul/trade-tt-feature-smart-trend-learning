@@ -1029,11 +1029,11 @@
               </span>
               <span class="control-label">Candle Timeframe:</span>
               <select id="timeframeSelect">
-                <option value="5">5 Seconds (Turbo)</option>
+                <option value="5" selected>5 Seconds (Turbo)</option>
                 <option value="10">10 Seconds (Turbo)</option>
                 <option value="15">15 Seconds</option>
                 <option value="30">30 Seconds</option>
-                <option value="60" selected>60s (1 Minute)</option>
+                <option value="60">60s (1 Minute)</option>
                 <option value="120">2 Minutes</option>
                 <option value="300">5 Minutes</option>
               </select>
@@ -1565,8 +1565,8 @@
     let screenStream = null;
     let autoTradingActive = false;
     let cycleIntervalTimer = null;
-    let candleTimeframe = 60; // seconds
-    let candleSecondsLeft = 60;
+    let candleTimeframe = 5; // seconds (Default: 5s Turbo)
+    let candleSecondsLeft = 5;
     let activePendingTrade = null;
 
     // DOM Elements
@@ -2150,7 +2150,8 @@
         ? (secondsLeft <= 1 || (secondsIntoCandle === 0 && now.getMilliseconds() < 400))
         : (secondsLeft <= 2 || secondsLeft >= (candleTimeframe - 1));
 
-      if (autoTradingActive && isBoundaryWindow && lastExecutedBucket !== currentBucket && !isCycleBusy && !activePendingTrade) {
+      const allowTrade = !activePendingTrade || (candleTimeframe <= 10);
+      if (autoTradingActive && isBoundaryWindow && lastExecutedBucket !== currentBucket && !isCycleBusy && allowTrade) {
         lastExecutedBucket = currentBucket;
         lastScanMs = nowMs;
         executeCycle(false, true); // Open trade and trigger 0ms Tampermonkey DOM click!
