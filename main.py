@@ -69,11 +69,20 @@ class SignalBroadcaster:
             logger.info("No active Tampermonkey userscripts connected. Fallback to hardware mouse clicking if enabled.")
             return
 
-        logger.info(f"⚡ [INSTANT DOM DISPATCH] Broadcasting {signal.get('direction')} to {len(self.active_connections)} Tampermonkey tabs (0ms zero-movement)!")
+        # CRITICAL MULTI-TAB SAFETY:
+        # If multiple Quotex tabs or iframes are open, execute trade on ONLY ONE primary tab!
+        # Secondary tabs only receive informational updates, NEVER multiple execution clicks.
+        primary_ws = self.active_connections[-1]
         disconnected = []
         for ws in list(self.active_connections):
             try:
-                await ws.send_json(signal)
+                if ws == primary_ws:
+                    await ws.send_json(signal)
+                    logger.info(f"⚡ [INSTANT DOM DISPATCH] Dispatched {signal.get('direction')} execution to primary Quotex tab.")
+                else:
+                    display_only_signal = dict(signal)
+                    display_only_signal["action"] = "DISPLAY_ONLY"
+                    await ws.send_json(display_only_signal)
             except Exception as e:
                 logger.warning(f"Failed to send to Tampermonkey client: {e}")
                 disconnected.append(ws)
@@ -230,8 +239,11 @@ async def analyze_and_trade(payload: AnalyzeRequest):
 
         trade_opened = None
 
-        # 3. Virtual Paper Execution (T=0)
-        if direction in ["CALL", "PUT"] and payload.auto_execute:
+        # 3. Virtual Paper Execution (T=0) - Strict Sniper Gate
+        tier_min_conf = STRICTNESS_TIERS.get(trading_session.current_strictness, STRICTNESS_TIERS[6]).min_confidence
+        min_trade_conf = tier_min_conf
+
+        if direction in ["CALL", "PUT"] and payload.auto_execute and confidence >= min_trade_conf:
             with trading_session.lock:
                 active_trade = trading_session.active_trade
                 is_cooling_down = time.time() < trading_session.loss_cooldown_until
@@ -243,47 +255,53 @@ async def analyze_and_trade(payload: AnalyzeRequest):
                 # Active trade in flight, do not open another until expired
                 logger.info("Trade signal generated but an active paper trade is already in progress.")
             else:
-                trade_opened = trading_session.open_trade(
-                    direction=direction,
-                    entry_price=entry_price,
-                    confidence=confidence,
-                    rationale=reasoning,
-                    trend=trend,
-                    setup_grade=setup_grade,
-                    pattern_name=decision_data.get("pattern_name", "Standard"),
-                    timeframe_seconds=payload.timeframe_seconds,
-                    indicators_summary={
-                        "rejection_wick_found": decision_data.get("rejection_wick_found", False),
-                        "key_level": decision_data.get("support_resistance_level", ""),
-                        "pos_ratio": decision_data.get("pos_ratio", 0.5),
-                        "streak": decision_data.get("streak", 0),
-                        "opposing_wick_ratio": decision_data.get("opposing_wick_ratio", 0.0),
-                        "body_ratio": decision_data.get("body_ratio", 0.5),
-                        "candle_color": decision_data.get("candle_color", "GREEN" if direction == "CALL" else "RED")
-                    }
-                )
-                # Instant broadcast to Tampermonkey userscript inside Quotex (0ms DOM click, zero mouse movement)
-                signal_data = {
-                    "type": "TRADE_SIGNAL",
-                    "action": "EXECUTE",
-                    "direction": direction,
-                    "confidence": confidence,
-                    "probability": confidence,
-                    "candle_probability": decision_data.get("candle_probability", confidence),
-                    "trade_id": trade_opened.id if trade_opened else str(int(time.time())),
-                    "timestamp": int(time.time() * 1000),
-                    "timeframe": payload.timeframe_seconds,
-                    "pattern_name": decision_data.get("pattern_name", "UNKNOWN"),
-                    "candle_color": decision_data.get("candle_color", "GREEN" if direction == "CALL" else "RED"),
-                    "source": "AI_AGENT",
-                    "target_accuracy": "100%",
-                    "account_mode": getattr(auto_clicker.config, "account_mode", "ALL")
-                }
-                await signal_broadcaster.broadcast_signal(signal_data)
+                try:
+                    trade_opened = trading_session.open_trade(
+                        direction=direction,
+                        entry_price=entry_price,
+                        confidence=confidence,
+                        rationale=reasoning,
+                        trend=trend,
+                        setup_grade=setup_grade,
+                        pattern_name=decision_data.get("pattern_name", "Standard"),
+                        timeframe_seconds=payload.timeframe_seconds,
+                        indicators_summary={
+                            "rejection_wick_found": decision_data.get("rejection_wick_found", False),
+                            "key_level": decision_data.get("support_resistance_level", ""),
+                            "pos_ratio": decision_data.get("pos_ratio", 0.5),
+                            "streak": decision_data.get("streak", 0),
+                            "opposing_wick_ratio": decision_data.get("opposing_wick_ratio", 0.0),
+                            "body_ratio": decision_data.get("body_ratio", 0.5),
+                            "candle_color": decision_data.get("candle_color", "GREEN" if direction == "CALL" else "RED")
+                        }
+                    )
+                except ValueError as ve:
+                    logger.info(f"Trade blocked by safety lock: {ve}")
+                    trade_opened = None
 
-                # Fallback to physical mouse clicking ONLY if no Tampermonkey tab is active and auto_clicker is enabled
-                if len(signal_broadcaster.active_connections) == 0 and auto_clicker.config.enabled:
-                    auto_clicker.execute_click(direction)
+                if trade_opened:
+                    # Instant broadcast to Tampermonkey userscript inside Quotex (0ms DOM click, zero mouse movement)
+                    signal_data = {
+                        "type": "TRADE_SIGNAL",
+                        "action": "EXECUTE",
+                        "direction": direction,
+                        "confidence": confidence,
+                        "probability": confidence,
+                        "candle_probability": decision_data.get("candle_probability", confidence),
+                        "trade_id": trade_opened.id if trade_opened else str(int(time.time())),
+                        "timestamp": int(time.time() * 1000),
+                        "timeframe": payload.timeframe_seconds,
+                        "pattern_name": decision_data.get("pattern_name", "UNKNOWN"),
+                        "candle_color": decision_data.get("candle_color", "GREEN" if direction == "CALL" else "RED"),
+                        "source": "AI_AGENT",
+                        "target_accuracy": "100%",
+                        "account_mode": getattr(auto_clicker.config, "account_mode", "ALL")
+                    }
+                    await signal_broadcaster.broadcast_signal(signal_data)
+
+                    # Fallback to physical mouse clicking ONLY if no Tampermonkey tab is active and auto_clicker is enabled
+                    if len(signal_broadcaster.active_connections) == 0 and auto_clicker.config.enabled:
+                        auto_clicker.execute_click(direction)
 
         return {
             "success": True,
@@ -359,6 +377,13 @@ async def auto_cycle(payload: AutoCycleRequest):
         tf_sec = payload.timeframe_seconds or 5
 
         # Step 0: Ingest chart frame and calculate live candle probability ALWAYS
+        if not payload.image_base64 or len(payload.image_base64) < 50:
+            return {
+                "cycle_action": "NO_SCREEN_FRAME_PROVIDED",
+                "message": "Real Quotex chart frame is strictly required. Please share screen.",
+                "session": trading_session.get_stats().model_dump()
+            }
+
         raw_pil = VisionProcessor.decode_base64_image(payload.image_base64)
         cropped_pil = VisionProcessor.auto_crop_quotex_chart(raw_pil, payload.crop_bounds)
         cropped_b64 = VisionProcessor.encode_image_base64(cropped_pil)
@@ -390,7 +415,7 @@ async def auto_cycle(payload: AutoCycleRequest):
             resolved_trade = trading_session.resolve_trade(close_price=close_price, trade_id=active.id)
             active = None  # Trade resolved; ready to scan for next candle setup
 
-            # If this cycle was purely for verification and NOT for executing a next candle trade, return resolution WITH live decision
+            # Step 1b: If verification only, return resolution immediately
             if not payload.execute_trade:
                 return {
                     "cycle_action": f"TRADE_RESOLVED_{resolved_trade.outcome}",
@@ -399,6 +424,7 @@ async def auto_cycle(payload: AutoCycleRequest):
                     "cropped_preview_b64": cropped_b64,
                     "session": trading_session.get_stats().model_dump()
                 }
+            # If execute_trade=True at a candle boundary, seamlessly proceed to Step 3 to evaluate and open the next trade!
 
         # Step 2: If a trade is still actively counting down in progress, return state WITH live decision
         if active and now < active.expiry_timestamp:
@@ -419,56 +445,71 @@ async def auto_cycle(payload: AutoCycleRequest):
 
         is_cooling_down = time.time() < trading_session.loss_cooldown_until
 
+        tier_min_conf = STRICTNESS_TIERS.get(trading_session.current_strictness, STRICTNESS_TIERS[6]).min_confidence
+        min_trade_conf = tier_min_conf
+
         if direction in ["CALL", "PUT"] and payload.execute_trade:
-            if is_cooling_down:
+            if confidence < min_trade_conf:
+                logger.info(f"⚡ [SNIPER GATE] Signal {direction} ({confidence:.1f}%) filtered: below {min_trade_conf:.1f}% threshold.")
+                action = f"SIGNAL_FILTERED_BELOW_THRESHOLD_{confidence:.1f}%"
+            elif is_cooling_down:
                 rem = int(trading_session.loss_cooldown_until - time.time())
                 logger.info(f"Post-loss capital defense cooldown active ({rem}s remaining). Skipping cycle trade execution.")
                 action = f"LOSS_COOLDOWN_ACTIVE_{rem}S"
             else:
-                opened_trade = trading_session.open_trade(
-                    direction=direction,
-                    entry_price=decision["current_price"],
-                    confidence=confidence,
-                    rationale=decision["reasoning"],
-                    trend=decision["trend"],
-                    setup_grade=decision["setup_grade"],
-                    pattern_name=decision.get("pattern_name", "Standard"),
-                    timeframe_seconds=tf_sec,
-                    indicators_summary={
-                        "rejection_wick_found": decision.get("rejection_wick_found", False),
-                        "key_level": decision.get("support_resistance_level", ""),
-                        "pos_ratio": decision.get("pos_ratio", 0.5),
-                        "streak": decision.get("streak", 0),
-                        "opposing_wick_ratio": decision.get("opposing_wick_ratio", 0.0),
-                        "body_ratio": decision.get("body_ratio", 0.5),
-                        "candle_color": decision.get("candle_color", "GREEN" if direction == "CALL" else "RED")
-                    }
-                )
-                action = f"TRADE_OPENED_{direction}"
-                # Instant broadcast to Tampermonkey userscript inside Quotex (0ms DOM click, zero mouse movement)
-                signal_data = {
-                    "type": "TRADE_SIGNAL",
-                    "action": "EXECUTE",
-                    "direction": direction,
-                    "confidence": confidence,
-                    "probability": confidence,
-                    "candle_probability": decision.get("candle_probability", confidence),
-                    "up_probability": decision.get("up_probability", confidence if direction == "CALL" else (100 - confidence)),
-                    "down_probability": decision.get("down_probability", confidence if direction == "PUT" else (100 - confidence)),
-                    "trade_id": opened_trade.id if opened_trade else str(int(time.time())),
-                    "timestamp": int(time.time() * 1000),
-                    "timeframe": tf_sec,
-                    "pattern_name": decision.get("pattern_name", "UNKNOWN"),
-                    "candle_color": decision.get("candle_color", "GREEN" if direction == "CALL" else "RED"),
-                    "source": "AI_AGENT",
-                    "target_accuracy": "100%",
-                    "account_mode": getattr(auto_clicker.config, "account_mode", "ALL")
-                }
-                await signal_broadcaster.broadcast_signal(signal_data)
+                try:
+                    opened_trade = trading_session.open_trade(
+                        direction=direction,
+                        entry_price=decision["current_price"],
+                        confidence=confidence,
+                        rationale=decision["reasoning"],
+                        trend=decision["trend"],
+                        setup_grade=decision["setup_grade"],
+                        pattern_name=decision.get("pattern_name", "Standard"),
+                        timeframe_seconds=tf_sec,
+                        indicators_summary={
+                            "rejection_wick_found": decision.get("rejection_wick_found", False),
+                            "key_level": decision.get("support_resistance_level", ""),
+                            "pos_ratio": decision.get("pos_ratio", 0.5),
+                            "streak": decision.get("streak", 0),
+                            "opposing_wick_ratio": decision.get("opposing_wick_ratio", 0.0),
+                            "body_ratio": decision.get("body_ratio", 0.5),
+                            "candle_color": decision.get("candle_color", "GREEN" if direction == "CALL" else "RED")
+                        }
+                    )
+                except ValueError as ve:
+                    logger.info(f"Auto-cycle trade blocked by safety cadence: {ve}")
+                    opened_trade = None
 
-                # Dual-redundant execution: also trigger physical mouse click if enabled
-                if auto_clicker.config.enabled:
-                    auto_clicker.execute_click(direction)
+                if opened_trade:
+                    action = f"TRADE_OPENED_{direction}"
+                    # Instant broadcast to Tampermonkey userscript inside Quotex (0ms DOM click, zero mouse movement)
+                    signal_data = {
+                        "type": "TRADE_SIGNAL",
+                        "action": "EXECUTE",
+                        "direction": direction,
+                        "confidence": confidence,
+                        "probability": confidence,
+                        "candle_probability": decision.get("candle_probability", confidence),
+                        "up_probability": decision.get("up_probability", confidence if direction == "CALL" else (100 - confidence)),
+                        "down_probability": decision.get("down_probability", confidence if direction == "PUT" else (100 - confidence)),
+                        "trade_id": opened_trade.id if opened_trade else str(int(time.time())),
+                        "timestamp": int(time.time() * 1000),
+                        "timeframe": tf_sec,
+                        "pattern_name": decision.get("pattern_name", "UNKNOWN"),
+                        "candle_color": decision.get("candle_color", "GREEN" if direction == "CALL" else "RED"),
+                        "source": "AI_AGENT",
+                        "target_accuracy": "100%",
+                        "account_mode": getattr(auto_clicker.config, "account_mode", "ALL")
+                    }
+                    await signal_broadcaster.broadcast_signal(signal_data)
+
+                    # Single execution channel: if Tampermonkey is connected inside Quotex, it executes the 0ms DOM click.
+                    # Hardware Win32 mouse click is ONLY a fallback when no Tampermonkey tab is connected.
+                    if len(signal_broadcaster.active_connections) == 0 and auto_clicker.config.enabled:
+                        auto_clicker.execute_click(direction)
+                else:
+                    action = "TRADE_SPACING_COOLDOWN"
         elif direction in ["CALL", "PUT"] and not payload.execute_trade:
             action = f"SIGNAL_ACTIVE_{direction}_PREVIEW"
         else:
@@ -732,4 +773,4 @@ if __name__ == "__main__":
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
     logger.info(f"Starting Quotex Autonomous Paper-Trading Agent at http://localhost:{port}")
-    uvicorn.run("main:app", host=host, port=port, reload=False)
+    uvicorn.run("main:app", host=host, port=port, reload=True)

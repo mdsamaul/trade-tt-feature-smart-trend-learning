@@ -46,13 +46,19 @@
 // @grant        GM_addStyle
 // @connect      localhost
 // @connect      127.0.0.1
+// @noframes
 // @run-at       document-idle
 // ==/UserScript==
 
 (function () {
   'use strict';
 
-  console.log("%c⚡ [Quotex Instant Auto-Trader 1.2.0] Initializing Demo & Real 100% Sniper userscript...", "color: #00ff88; font-weight: bold; font-size: 14px;");
+  // Do NOT run inside iframes or embedded sub-windows:
+  if (window.top !== window.self) {
+    return;
+  }
+
+  console.log("%c⚡ [Quotex Instant Auto-Trader 1.2.1] Initializing Demo & Real 100% Sniper userscript (Single-Click Shield Active)...", "color: #00ff88; font-weight: bold; font-size: 14px;");
 
   // =========================================================================
   // CONFIGURATION & STATE
@@ -346,7 +352,16 @@
   // =========================================================================
   // ZERO-MOVEMENT INSTANT DISPATCHER (0ms DOM CLICK)
   // =========================================================================
+  let isClickLocked = false;
+
   function executeInstantDOMClick(direction, signal) {
+    if (isClickLocked) {
+      console.warn("⚡ [Quotex Instant Trader] Single-trade click lock is active. Duplicate click blocked.");
+      return false;
+    }
+    isClickLocked = true;
+    setTimeout(() => { isClickLocked = false; }, 4500);
+
     const startTime = performance.now();
 
     // ⚡ ZERO-DELAY INSTANT EXECUTION: Pull pre-cached button reference (Zero query overhead)
@@ -365,48 +380,18 @@
       return false;
     }
 
-    // ⚡ 0ms IMMEDIATE DOM CLICK DISPATCH:
-    // Fire click directly on line 1 without waiting for any layout calculations!
+    // ⚡ EXACTLY ONE SINGLE CLEAN DOM CLICK:
+    // Focus and execute single clean click to prevent double-trade submission:
     try {
+      targetBtn.focus();
       targetBtn.click();
-    } catch (e) {}
-
-    const rect = targetBtn.getBoundingClientRect();
-    const clientX = rect.left + rect.width / 2;
-    const clientY = rect.top + rect.height / 2;
-
-    const eventInit = {
-      bubbles: true,
-      cancelable: true,
-      composed: true,
-      view: window,
-      clientX: clientX,
-      clientY: clientY,
-      screenX: window.screenX + clientX,
-      screenY: window.screenY + clientY,
-      pointerId: 1,
-      pointerType: 'mouse',
-      isPrimary: true,
-      button: 0,
-      buttons: 1
-    };
-
-    // Dispatch full pointer event burst to target button and all child/parent layers
-    const targets = [targetBtn];
-    if (targetBtn.firstElementChild) targets.push(targetBtn.firstElementChild);
-    if (targetBtn.parentElement && (targetBtn.parentElement.tagName === 'BUTTON' || targetBtn.parentElement.getAttribute('role') === 'button')) {
-      targets.push(targetBtn.parentElement);
-    }
-
-    for (const el of targets) {
+    } catch (e) {
       try {
-        el.dispatchEvent(new PointerEvent('pointerdown', eventInit));
-        el.dispatchEvent(new MouseEvent('mousedown', eventInit));
-        el.dispatchEvent(new PointerEvent('pointerup', eventInit));
-        el.dispatchEvent(new MouseEvent('mouseup', eventInit));
-        el.dispatchEvent(new MouseEvent('click', eventInit));
-        el.click();
-      } catch (e) {}
+        const mouseEvt = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
+        targetBtn.dispatchEvent(mouseEvt);
+      } catch (err2) {
+        console.error("DOM click dispatch failed:", err2);
+      }
     }
 
     const elapsed = (performance.now() - startTime).toFixed(2);
@@ -579,11 +564,37 @@
     const direction = (signal.direction || '').toUpperCase();
     if (direction !== 'CALL' && direction !== 'PUT') return;
 
+    // Display-only signal for secondary tabs or preview modes (NEVER click)
+    if (signal.action === 'DISPLAY_ONLY') {
+      showSignalPercentagePopup(signal, 'ℹ️ Synced Tab (Observation Mode)');
+      return;
+    }
+
     const tradeId = signal.trade_id || `${direction}_${signal.timestamp || Date.now()}`;
     const now = Date.now();
 
-    // Prevent duplicate clicks on the exact same signal
-    if (lastExecutedTradeId === tradeId && (now - lastExecutionTime) < CONFIG.debounceMs) {
+    // 1. Cross-Tab LocalStorage Shield:
+    // Guarantees that across all open Quotex tabs, only 1 tab executes the trade!
+    const crossTabKey = 'quotex_last_global_execution';
+    const lastGlobalExec = parseInt(localStorage.getItem(crossTabKey) || '0', 10);
+    if ((now - lastGlobalExec) < 4500) {
+      console.log(`⚠️ Execution blocked by cross-tab shield (${now - lastGlobalExec}ms ago). Ignoring duplicate.`);
+      showSignalPercentagePopup(signal, '🛡️ Single Trade Active (Blocked Duplicate)');
+      return;
+    }
+
+    // 2. In-Tab Execution Shield & Deduplication
+    if ((now - lastExecutionTime) < 4500 || (signal.trade_id && signal.trade_id === lastExecutedTradeId)) {
+      console.log(`⚠️ Execution debounced: ${now - lastExecutionTime}ms since last execution. Ignoring duplicate signal.`);
+      return;
+    }
+
+    // 3. Strict 95%+ Probability Gate:
+    // Only execute when probability is 95% or higher to protect capital!
+    const conf = parseFloat(signal.confidence || signal.probability || signal.candle_probability || 0);
+    if (conf > 0 && conf < 95.0) {
+      console.log(`ℹ️ [Quotex Instant Trader] Signal ${direction} confidence (${conf}%) below 95% threshold. Filtered to prevent loss.`);
+      showSignalPercentagePopup(signal, `🛡️ Filtered: ${conf}% < 95% Threshold (Loss Prevention)`);
       return;
     }
 
@@ -594,6 +605,7 @@
       return;
     }
 
+    localStorage.setItem(crossTabKey, now.toString());
     lastExecutedTradeId = tradeId;
     lastExecutionTime = now;
     executeInstantDOMClick(direction, signal);
@@ -640,9 +652,9 @@
     }
   }
 
-  // Fast Parallel HTTP Polling Fallback (Guarantees signal delivery if WS is blocked)
+  // Parallel HTTP Polling Fallback ONLY when WebSocket is disconnected
   setInterval(() => {
-    if (autoExecuteEnabled) {
+    if (!isConnected && autoExecuteEnabled) {
       if (typeof GM_xmlhttpRequest !== 'undefined') {
         GM_xmlhttpRequest({
           method: "GET",

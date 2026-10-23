@@ -88,11 +88,11 @@ STRICTNESS_TIERS: Dict[int, StrictnessConfig] = {
     ),
     6: StrictnessConfig(
         level=6,
-        name="Ultra Sniper / 100% Confluence (Zero-Loss Mode)",
-        min_confidence=82.0,
+        name="Ultra Sniper / 95%+ Win-Rate Target (Zero-Loss Mode)",
+        min_confidence=95.0,
         min_wick_ratio=0.18,
         require_trend_alignment=True,
-        description="Zero-compromise sniper mode for 100% Win Rate. Demands 82%+ confidence, strict trend confluence, clean body momentum, and space before S&R."
+        description="Zero-compromise sniper mode for 95%+ Win Rate. Demands 95%+ confidence, strict trend confluence, clean body momentum, and space before S&R."
     )
 }
 
@@ -1675,9 +1675,9 @@ You MUST respond strictly in valid JSON format matching this schema:
             penalty = (red_streak - (max_streak - 1)) * (8.0 if timeframe_seconds <= 10 else 6.0)
             down_score -= penalty
 
-        # 6. Clamp Probabilities to Valid Range [25.0, 96.0]
-        up_prob = min(96.0, max(25.0, up_score))
-        down_prob = min(96.0, max(25.0, down_score))
+        # 6. Clamp Probabilities to Valid Range [25.0, 98.5]
+        up_prob = min(98.5, max(25.0, up_score))
+        down_prob = min(98.5, max(25.0, down_score))
         diff = up_prob - down_prob
 
         # 7. Directional Resolution & Pattern Selection
@@ -1740,7 +1740,7 @@ You MUST respond strictly in valid JSON format matching this schema:
                     opposing_wick_ratio=upper_wick,
                     body_ratio=body_ratio
                 )
-                up_prob = min(96.0, max(50.0, up_prob + conf_delta))
+                up_prob = min(98.5, max(50.0, up_prob + conf_delta))
                 if not is_allowed:
                     direction = "SKIP"
                     confidence = up_prob
@@ -1810,7 +1810,7 @@ You MUST respond strictly in valid JSON format matching this schema:
                     opposing_wick_ratio=lower_wick,
                     body_ratio=body_ratio
                 )
-                down_prob = min(96.0, max(50.0, down_prob + conf_delta))
+                down_prob = min(98.5, max(50.0, down_prob + conf_delta))
                 if not is_allowed:
                     direction = "SKIP"
                     confidence = down_prob
@@ -1990,7 +1990,7 @@ class TradingSessionManager:
         self.rolling_window_size = int(os.getenv("ROLLING_WINDOW_SIZE", str(rolling_window_size)))
         self.target_win_rate = float(os.getenv("TARGET_ROLLING_WIN_RATE", str(target_win_rate)))
 
-        env_strict = int(os.getenv("DEFAULT_STRICTNESS", "2"))
+        env_strict = int(os.getenv("DEFAULT_STRICTNESS", "6"))
         self.current_strictness = max(1, min(6, env_strict))
         self.auto_optimize = True
 
@@ -2006,6 +2006,7 @@ class TradingSessionManager:
         self.active_trade: Optional[TradeRecord] = None
         self.trade_history: List[TradeRecord] = []
         self.loss_cooldown_until: float = 0.0
+        self.last_trade_opened_time: float = 0.0
 
     def get_stats(self) -> SessionStats:
         with self.lock:
@@ -2085,6 +2086,9 @@ class TradingSessionManager:
                 raise ValueError("An active paper trade is already open. Wait for candle expiry.")
 
             now = time.time()
+            if (now - self.last_trade_opened_time) < 4.5:
+                raise ValueError(f"Strict one-trade cadence: {now - self.last_trade_opened_time:.1f}s since last trade. Minimum 4.5s spacing enforced.")
+
             if now < self.loss_cooldown_until:
                 remaining = int(self.loss_cooldown_until - now)
                 raise ValueError(f"Post-loss capital defense cooldown active ({remaining}s remaining). Waiting for market stabilization.")
@@ -2109,6 +2113,7 @@ class TradingSessionManager:
                 indicators_summary=indicators_summary or {}
             )
             self.active_trade = trade
+            self.last_trade_opened_time = now
             logger.info(f"VIRTUAL TRADE OPENED: {direction} @ {entry_price} | Pattern: {pattern_name} | Conf: {confidence}% | Strictness: L{self.current_strictness}")
             return trade
 

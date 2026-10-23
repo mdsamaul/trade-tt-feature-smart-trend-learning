@@ -952,6 +952,11 @@
         </div>
 
         <div class="card-body">
+          <!-- Screen Share Warning Banner -->
+          <div id="screenShareAlertBanner" style="display: block; background: rgba(255, 184, 0, 0.12); border: 1px solid rgba(255, 184, 0, 0.4); color: #ffd700; padding: 10px 14px; border-radius: 6px; font-size: 0.82rem; margin-bottom: 12px; font-weight: 600;">
+            ⚠️ <strong>স্ক্রীন শেয়ার ছাড়া ট্রেড নেওয়া সম্পূর্ণ বন্ধ:</strong> আসল চার্ট অ্যানালাইসিস এবং নিরাপদ ট্রেডের জন্য প্রথমে উপরের <strong>"Share Quotex Tab"</strong> বাটনে ক্লিক করে Quotex চার্টের ব্রাউজার ট্যাব শেয়ার করুন।
+          </div>
+
           <!-- Video Stream & Offscreen Canvas -->
           <div class="stream-container" id="streamContainer">
             <video id="streamVideo" autoplay playsinline muted></video>
@@ -1297,7 +1302,7 @@
             <option value="3">Level 3 - Selective / High Probability (78% min conf)</option>
             <option value="4">Level 4 - Defense / Institutional (82% min conf)</option>
             <option value="5">Level 5 - Sniper Mode (86% min conf)</option>
-            <option value="6" selected>Level 6 - Ultra Sniper 100% Confluence (90%+ min conf, Zero-Loss Mode)</option>
+            <option value="6" selected>Level 6 - Ultra Sniper (95%+ Probability Only, Loss Prevention Mode)</option>
           </select>
         </div>
         <div class="form-group" style="margin-top: 10px;">
@@ -1659,6 +1664,9 @@
         shareScreenBtn.classList.remove('btn-primary');
         shareScreenBtn.classList.add('btn-secondary');
 
+        const alertBanner = document.getElementById('screenShareAlertBanner');
+        if (alertBanner) alertBanner.style.display = 'none';
+
         // Immediate live scan upon screen connection
         setTimeout(() => {
           lastScanMs = Date.now();
@@ -1672,6 +1680,12 @@
           shareScreenBtn.classList.remove('btn-secondary');
           shareScreenBtn.classList.add('btn-primary');
           screenStream = null;
+          const banner = document.getElementById('screenShareAlertBanner');
+          if (banner) banner.style.display = 'block';
+          if (autoTradingActive) {
+            stopAutonomousLoop();
+            alert("⚠️ স্ক্রীন শেয়ার বন্ধ হয়ে গেছে! আসল চার্ট ছাড়া ভুল ট্রেড ও লস ঠেকাতে অটো ট্রেডার সাথে সাথে পজ (Pause) করা হয়েছে।");
+          }
         };
 
         // Resume AudioContext on user interaction
@@ -1928,15 +1942,23 @@
     let isCycleBusy = false;
     let lastExecutedBucket = -1;
     let lastScanMs = 0;
+    let lastTradeExecutedTime = 0;
 
     async function executeCycle(forceVerification = false, executeTrade = false) {
-      if (isCycleBusy && !forceVerification) return;
+      if (isCycleBusy && !forceVerification && !executeTrade) return;
       isCycleBusy = true;
 
+      // STRICT SAFETY MANDATE: Never analyze or execute trades without real Quotex screen!
       let b64 = captureCurrentFrameBase64();
       if (!b64) {
-        // If screen not shared yet, provide simulated mock frame for demonstration
-        b64 = generateMockChartCanvasBase64();
+        isCycleBusy = false;
+        const scanBadge = document.getElementById('autoScanBadge');
+        if (scanBadge) {
+          scanBadge.innerHTML = '⚠️ স্ক্রীন শেয়ার দিন (Click "Share Quotex Tab")';
+          scanBadge.style.color = '#ffd700';
+          scanBadge.style.borderColor = '#ffd700';
+        }
+        return;
       }
 
       try {
@@ -1961,11 +1983,15 @@
         if (scanBadge) {
           const timeStr = new Date().toLocaleTimeString();
           if (executeTrade && data.cycle_action && data.cycle_action.includes('TRADE_OPENED')) {
-            scanBadge.innerHTML = `⚡ TRADE PLACED (${timeStr})`;
+            scanBadge.innerHTML = `⚡ 95%+ TRADE PLACED (${timeStr})`;
             scanBadge.style.color = 'var(--neon-green)';
             scanBadge.style.borderColor = 'var(--neon-green)';
+          } else if (data.cycle_action && data.cycle_action.includes('FILTERED_BELOW_95PCT')) {
+            scanBadge.innerHTML = `🛡️ ফিল্টার্ড (৯৫% এর নিচে, লস ঠেকানো হয়েছে) (${timeStr})`;
+            scanBadge.style.color = 'var(--neon-gold)';
+            scanBadge.style.borderColor = 'var(--neon-gold)';
           } else {
-            scanBadge.innerHTML = `🟢 SCANNING LIVE (${timeStr})`;
+            scanBadge.innerHTML = `🟢 SCANNING LIVE 95%+ TARGET (${timeStr})`;
             scanBadge.style.color = 'var(--neon-cyan)';
             scanBadge.style.borderColor = 'rgba(0, 240, 255, 0.4)';
           }
@@ -2058,49 +2084,14 @@
 
       // New Trade Placed Audio & Instant UI Update
       if (data.cycle_action && data.cycle_action.includes('TRADE_OPENED')) {
+        lastTradeExecutedTime = Date.now();
         sound.playTradePlaced();
         fetchTradeHistory();
         fetchSessionStatus();
       }
     }
 
-    // Heuristic synthetic frame generator (for offline / testing without screen share)
-    function generateMockChartCanvasBase64() {
-      const off = document.createElement('canvas');
-      off.width = 640;
-      off.height = 360;
-      const ctx = off.getContext('2d');
-      // Dark background
-      ctx.fillStyle = '#0a0d14';
-      ctx.fillRect(0, 0, off.width, off.height);
-      // Grid lines
-      ctx.strokeStyle = '#1b2333';
-      ctx.lineWidth = 1;
-      for (let y = 30; y < off.height; y += 40) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(off.width, y); ctx.stroke();
-      }
-      // Candlesticks
-      let price = 180;
-      for (let i = 20; i < off.width - 60; i += 18) {
-        const isGreen = Math.random() > 0.45;
-        const bodyHeight = 8 + Math.random() * 26;
-        const wickHeight = bodyHeight + 6 + Math.random() * 16;
-        price += (isGreen ? -1 : 1) * (Math.random() * 8);
 
-        ctx.strokeStyle = isGreen ? '#00e793' : '#ff3b56';
-        ctx.fillStyle = isGreen ? '#00e793' : '#ff3b56';
-
-        // Wick
-        ctx.beginPath();
-        ctx.moveTo(i + 4, price - wickHeight / 2);
-        ctx.lineTo(i + 4, price + wickHeight / 2);
-        ctx.stroke();
-
-        // Body
-        ctx.fillRect(i, price - bodyHeight / 2, 8, bodyHeight);
-      }
-      return off.toDataURL('image/jpeg', 0.85);
-    }
 
     // =========================================================================
     // REAL-CLOCK CANDLE COUNTDOWN & SENIOR TRADER EXECUTION SYNC
@@ -2142,32 +2133,42 @@
 
       const currentBucket = Math.floor(nowMs / (candleTimeframe * 1000));
 
-      // 1. Precise Trade Execution Check:
-      // When auto-trading is active AND we hit candle boundary:
-      // For turbo timeframes (<= 10s): trigger in the final 1 second before candle close (secondsLeft <= 1)
-      // For standard timeframes (> 10s): trigger in final 2 seconds or first 1 second of candle
-      const isBoundaryWindow = candleTimeframe <= 10
-        ? (secondsLeft <= 1 || (secondsIntoCandle === 0 && now.getMilliseconds() < 400))
-        : (secondsLeft <= 2 || secondsLeft >= (candleTimeframe - 1));
-
-      const allowTrade = !activePendingTrade || (candleTimeframe <= 10);
-      if (autoTradingActive && isBoundaryWindow && lastExecutedBucket !== currentBucket && !isCycleBusy && allowTrade) {
+      // 1. Precise Single-Trade Execution Check:
+      // When a fresh candle begins and autonomous agent is ON:
+      // Take strictly ONE trade per candle bucket.
+      if (autoTradingActive && lastExecutedBucket !== currentBucket && !activePendingTrade) {
+        if (!screenStream || !streamVideo.videoWidth) {
+          console.warn("Screen share not active. Cannot execute boundary trade.");
+          return;
+        }
         lastExecutedBucket = currentBucket;
+        lastTradeExecutedTime = nowMs;
         lastScanMs = nowMs;
-        executeCycle(false, true); // Open trade and trigger 0ms Tampermonkey DOM click!
+        executeCycle(false, true); // Opens strictly 1 trade with fresh real analysis!
         return;
       }
 
-      // 2. Continuous Active Auto-Scanner Heartbeat:
-      // For 5s or 10s turbo, scan every 1200ms; for standard timeframes scan every 2500ms
-      const scanInterval = candleTimeframe <= 10 ? 1200 : 2500;
+      // 2. Continuous Active Auto-Scanner & Outcome Verifier Heartbeat:
+      // Check every 800ms for 5s/10s turbo, 1500ms for standard timeframes
+      const scanInterval = candleTimeframe <= 10 ? 800 : 1500;
       if ((nowMs - lastScanMs >= scanInterval) && !isCycleBusy) {
         lastScanMs = nowMs;
-        executeCycle(false, false);
+        // If an active trade has reached its expiry timestamp, verify its outcome immediately
+        const shouldVerify = Boolean(activePendingTrade && (nowMs >= (activePendingTrade.expiry_timestamp * 1000 - 300)));
+        executeCycle(shouldVerify, false);
       }
     }
 
     function startAutonomousLoop() {
+      if (!screenStream || !streamVideo.videoWidth) {
+        alert("⚠️ আগে Quotex স্ক্রীন শেয়ার করুন!\n\nউপরে 'Share Quotex Tab' বাটনে চাপ দিয়ে আপনার Quotex চার্টের ব্রাউজার ট্যাব সিলেক্ট করুন। রিয়েল স্ক্রীন শেয়ার ছাড়া কোনো ট্রেড ও অ্যানালাইসিস সম্ভব নয়।");
+        if (shareScreenBtn) {
+          shareScreenBtn.scrollIntoView({ behavior: 'smooth' });
+          shareScreenBtn.style.boxShadow = '0 0 25px #00f0ff';
+        }
+        return;
+      }
+
       autoTradingActive = true;
       toggleAutoBtn.innerHTML = '⏹ Stop Autonomous Agent';
       toggleAutoBtn.classList.remove('btn-success');
